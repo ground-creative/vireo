@@ -1,0 +1,7 @@
+# Everything in config/ is personal except the demo.
+config/*
+!config/demo.yaml
+
+# Runtime session envelopes are ignored; .gitkeep keeps the folder in the repo.
+sessions/*
+!sessions/.gitkeep

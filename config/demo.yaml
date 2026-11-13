@@ -1,0 +1,54 @@
+# vireo configuration — the demo endpoint.
+#
+# One endpoint, three agents, one backend (./cmd/fakeagent on :8088).
+#
+# Only files inside config/ are loaded, and --config is required:
+#
+#     go run . --config demo
+#
+# Copy this file for your own endpoint (config/mine.yaml); everything in
+# config/ except demo.yaml is ignored by git.
+
+server:
+  port: 7777
+  cert_file: "certs/cert.pem"
+  key_file: "certs/key.pem"
+  alpn:
+    - "vireo/1"
+  endpoint:
+    id: "restaurant-dev"
+    name: "restaurant"
+    description: "Fresh pizza and table bookings for the neighborhood"
+
+# Default webhook every agent inherits. The backend dispatches on the
+# X-Vireo-Agent header. Override per agent only when it lives elsewhere.
+transport: "http://127.0.0.1:8088/vireo/message"
+
+# Static URLs a peer can follow. Advertised in the manifest under "refs".
+refs:
+  menu: "http://127.0.0.1:8088/menu"
+  docs: "https://github.com/your-org/your-service"
+
+session:
+  list: true                            # advertise the session.* commands
+  ttl_default: 3600                     # seconds; slides on every message
+  length: 32                            # mint rules — server-internal
+  store: "file"                         # file | memory — file survives a restart
+  file: "vireo-sessions.json"           # name inside sessions/ — rename freely
+  retention: "720h"                     # 30d: finished sessions older than this are swept
+
+agents:
+  - name: "orders"
+    description: "Take food orders: pizzas, sides, drinks, pickup or delivery"
+    sessions: true                      # holds multi-turn conversations
+    refs:
+      menu: "http://127.0.0.1:8088/menu"
+
+  - name: "reservations"
+    description: "Check availability, book a table and cancel a booking"
+    sessions: true
+
+  - name: "concierge"
+    description: "Answer anything else: hours, directions, general questions"
+    sessions: true
+    timeout: "15s"                      # this agent's own webhook timeout
