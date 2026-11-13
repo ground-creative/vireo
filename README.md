@@ -62,8 +62,8 @@ generates its identity once and reuses it, so conversations survive between runs
 ```
 $ ./vireo-chat
 client id: vireo_4f1c8a2e9b7d4c0fa1e2d3b4c5a6f7e8 (/home/you/.config/vireo/client-id)
-> connect localhost
-connected to localhost:7777 (well-known port)
+> connect localhost:7777
+connected to localhost:7777 (explicit address)
 
 agents:
   1) orders         Take food orders: pizzas, sides, drinks, pickup or delivery [conversation]
@@ -86,8 +86,9 @@ their webhooks in config/.
    [open · turn 1] "demo reply"
 ```
 
-Numbers select from the current screen. `back` returns to the main menu, which
-lists every conversation you already have — a number there resumes it.
+Only agents are numbered. `back` returns to the main menu, which lists your
+recent conversations by their stable ids — type an id to continue one, so it
+keeps working however many conversations appear around it.
 
 ## Configuration
 
@@ -119,11 +120,14 @@ there is no plaintext mode. Every key, default and inheritance rule is in
 
 ### DNS discovery
 
-Peers resolve `_vireo._tcp.<domain>` first, then fall back to port 7777:
+A peer given a bare domain looks it up as `_vireo._tcp.<domain>`:
 
 ```
 _vireo._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
 ```
+
+That record is the only way a domain resolves — there is no assumed port. An
+endpoint without a record has to be addressed as `host:port`.
 
 ## Connecting an AI (`vireo-mcp`)
 

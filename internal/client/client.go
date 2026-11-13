@@ -1,5 +1,5 @@
 // Package client is the connection library for vireo daemons. It resolves a
-// hostname to a daemon address (SRV record, then a well-known port fallback),
+// hostname to a daemon address (an explicit host:port, or an SRV record),
 // connects over TLS or QUIC, negotiates with a stable client id, and exposes
 // the manifest, sessions, and messaging.
 //
@@ -26,9 +26,6 @@ import (
 	"vireo/internal/frame"
 	"vireo/internal/protocol"
 )
-
-// DefaultPort is the well-known vireo port used when no SRV record exists.
-const DefaultPort = 7777
 
 // SRVService and SRVProto form the lookup name: _vireo._tcp.<host>.
 const (
@@ -68,12 +65,12 @@ type Resolver interface {
 
 // Discover resolves a hostname to a daemon address:
 //
-//  1. host already carries a port → used as-is
+//  1. host already carries a port → used as-is, no lookup
 //  2. SRV lookup _vireo._tcp.<host> → host and port from the record
-//  3. fallback <host>:<DefaultPort>
 //
-// A missing SRV record is not an error — the fallback keeps the common
-// single-port deployment working with zero DNS setup.
+// There is no default port and no fallback: an endpoint that is not published
+// in DNS has to be addressed explicitly as host:port. Guessing a port would
+// make a typo in a hostname look like a daemon that is down.
 func Discover(host string, res Resolver) (string, error) {
 	addr, _, err := DiscoverDetail(host, res)
 	return addr, err
@@ -83,8 +80,17 @@ func Discover(host string, res Resolver) (string, error) {
 const (
 	ViaExplicit = "explicit address" // host:port given as-is
 	ViaSRV      = "SRV record"       // _vireo._tcp.<host> answered
-	ViaFallback = "well-known port"  // default port, no SRV record
 )
+
+// SystemResolver looks records up with the host resolver. Pass nil to Discover
+// to get this.
+var SystemResolver Resolver = systemResolver{}
+
+type systemResolver struct{}
+
+func (systemResolver) LookupSRV(service, proto, name string) (string, []*net.SRV, error) {
+	return net.DefaultResolver.LookupSRV(context.Background(), service, proto, name)
+}
 
 // DiscoverDetail is Discover with provenance: how the address was found.
 func DiscoverDetail(host string, res Resolver) (addr, via string, err error) {
@@ -93,28 +99,30 @@ func DiscoverDetail(host string, res Resolver) (addr, via string, err error) {
 		return "", "", fmt.Errorf("client: empty host")
 	}
 	if _, _, err := net.SplitHostPort(host); err == nil {
-		return host, ViaExplicit, nil // explicit port: caller knows best
+		return host, ViaExplicit, nil // explicit port: no lookup needed
+	}
+	if res == nil {
+		res = SystemResolver
 	}
 	// A bracketed-but-portless IPv6 literal ("[::1]") loses its brackets so
 	// net.JoinHostPort re-adds them exactly once.
 	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
 		host = host[1 : len(host)-1]
 	}
-	if res != nil {
-		if _, addrs, err := res.LookupSRV(SRVService, SRVProto, host); err == nil && len(addrs) > 0 {
-			// Pick the highest-priority record (lowest value); ties broken by
-			// the resolver's ordering.
-			best := addrs[0]
-			for _, s := range addrs[1:] {
-				if s.Priority < best.Priority {
-					best = s
-				}
+	if _, addrs, lerr := res.LookupSRV(SRVService, SRVProto, host); lerr == nil && len(addrs) > 0 {
+		// Pick the highest-priority record (lowest value); ties broken by
+		// the resolver's ordering.
+		best := addrs[0]
+		for _, s := range addrs[1:] {
+			if s.Priority < best.Priority {
+				best = s
 			}
-			target := strings.TrimSuffix(best.Target, ".")
-			return net.JoinHostPort(target, strconv.Itoa(int(best.Port))), ViaSRV, nil
 		}
+		target := strings.TrimSuffix(best.Target, ".")
+		return net.JoinHostPort(target, strconv.Itoa(int(best.Port))), ViaSRV, nil
 	}
-	return net.JoinHostPort(host, strconv.Itoa(DefaultPort)), ViaFallback, nil
+	return "", "", fmt.Errorf("no SRV record _%s._%s.%s — connect with an explicit host:port instead",
+		SRVService, SRVProto, host)
 }
 
 // Connect dials opts.Addr, negotiates with the client id, and captures the

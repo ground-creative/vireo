@@ -25,19 +25,14 @@ import (
 	"vireo/internal/protocol"
 )
 
-// choice is one numbered item on the current screen.
-type choice struct {
-	kind    string // "agent" or "session"
-	agent   string
-	session string
-}
-
+// conn is the shell's connection plus its mode state.
 type conn struct {
 	*client.Client
 	addr     string
-	agent    string            // open agent; "" = endpoint level
-	sessions map[string]string // agent → current session id
-	choices  []choice
+	agent    string                          // open agent; "" = endpoint level
+	sessions map[string]string               // agent → current session id
+	listed   map[string][]client.SessionInfo // agent → conversations last printed
+	numbered []string                        // agent names, in the order printed
 }
 
 func main() {
@@ -130,22 +125,19 @@ func main() {
 		}
 
 		if n, err := strconv.Atoi(cmd); err == nil {
-			selectNumber(c, n)
+			selectAgent(c, n)
 			continue
 		}
 
 		switch cmd {
 		case "agents", "menu":
-			c.agent = ""
 			showEndpoint(c)
 			continue
 		case "back":
-			c.agent = ""
 			showEndpoint(c)
 			continue
 		case "sessions", "chats", "list", "conversations":
 			if c.agent == "" {
-				c.agent = ""
 				showEndpoint(c)
 				continue
 			}
@@ -160,10 +152,10 @@ func main() {
 			continue
 		case "resume":
 			if c.agent == "" {
-				fmt.Println("open an agent first")
+				fmt.Println("open an agent first, or type a conversation id on the main screen")
 				continue
 			}
-			resumeSession(c)
+			resumeSession(c, strings.TrimSpace(strings.TrimPrefix(line, fields[0])))
 			continue
 		case "latest":
 			if c.agent == "" {
@@ -186,8 +178,13 @@ func main() {
 			continue
 		}
 
+		// A conversation id resumes it, wherever it was last printed.
+		if resumeByID(c, line) {
+			continue
+		}
+
 		if c.agent == "" {
-			fmt.Println("type a number, an agent name, or: help")
+			fmt.Println("type an agent number, an agent name, a conversation id, or: help")
 			continue
 		}
 		sendMessage(c, line)
@@ -260,10 +257,13 @@ func doConnect(opts client.Options, host string) (*conn, error) {
 	return nc, nil
 }
 
-// showEndpoint is the main menu: agents first, then every conversation you
-// already have, so a previous thread is one number away.
+// showEndpoint is the main menu: agents are numbered, conversations keep their
+// stable ids. An id is what you type to continue one — it does not shift when
+// another conversation appears.
 func showEndpoint(c *conn) {
-	c.choices = nil
+	c.agent = ""
+	c.numbered = nil
+	c.listed = map[string][]client.SessionInfo{}
 	agents := c.Agents()
 
 	fmt.Println()
@@ -272,12 +272,12 @@ func showEndpoint(c *conn) {
 	} else {
 		fmt.Println("agents:")
 		for _, a := range agents {
-			c.choices = append(c.choices, choice{kind: "agent", agent: a.Name})
+			c.numbered = append(c.numbered, a.Name)
 			kind := "one message"
 			if a.Sessions {
 				kind = "conversation"
 			}
-			fmt.Printf("  %d) %-16s %s [%s]\n", len(c.choices), a.Name, a.Description, kind)
+			fmt.Printf("  %d) %-16s %s [%s]\n", len(c.numbered), a.Name, a.Description, kind)
 		}
 	}
 
@@ -295,16 +295,16 @@ func showEndpoint(c *conn) {
 		if err != nil {
 			continue
 		}
+		c.listed[a.Name] = list
 		for _, s := range list {
 			rows = append(rows, row{agent: a.Name, session: s})
 		}
 	}
 	if len(rows) > 0 {
 		fmt.Println()
-		fmt.Println("conversations:")
+		fmt.Println("recent conversations:")
 		for _, r := range rows {
-			c.choices = append(c.choices, choice{kind: "session", agent: r.agent, session: r.session.ID})
-			fmt.Printf("  %d) %-14s %s  %s\n", len(c.choices), r.agent, shortID(r.session.ID), describe(r.session))
+			fmt.Printf("  %s  %-14s %s\n", shortID(r.session.ID), r.agent, describe(r.session))
 		}
 	}
 
@@ -318,15 +318,17 @@ func showEndpoint(c *conn) {
 
 	fmt.Println()
 	if len(rows) > 0 {
-		fmt.Println("type a number to open an agent or resume a conversation — help for commands")
+		fmt.Println("type an agent number or name, or a conversation id to resume — help")
 	} else {
-		fmt.Println("type a number or an agent name — help for commands")
+		fmt.Println("type an agent number or name — help")
 	}
 }
 
 // showAgent is one agent's screen: its description and its conversations.
+// Numbers are not used here; conversations are addressed by id.
 func showAgent(c *conn) {
 	entry, _ := c.Agent(c.agent)
+	c.numbered = nil
 	fmt.Println()
 	fmt.Printf("%s — %s\n", entry.Name, entry.Description)
 	if !entry.Sessions {
@@ -341,7 +343,7 @@ func showAgent(c *conn) {
 		fmt.Printf("conversations: %v\n", err)
 		return
 	}
-	c.choices = nil
+	c.listed[c.agent] = list
 	current := c.sessions[c.agent]
 	fmt.Println()
 	if len(list) == 0 {
@@ -350,15 +352,14 @@ func showAgent(c *conn) {
 	}
 	fmt.Println("conversations:")
 	for _, s := range list {
-		c.choices = append(c.choices, choice{kind: "session", agent: c.agent, session: s.ID})
 		marker := " "
 		if s.ID == current {
 			marker = "*"
 		}
-		fmt.Printf(" %s%d) %s  %s\n", marker, len(c.choices), shortID(s.ID), describe(s))
+		fmt.Printf(" %s%s  %s\n", marker, shortID(s.ID), describe(s))
 	}
 	fmt.Println()
-	fmt.Println("type a number to continue one · new · back")
+	fmt.Println("type a conversation id to continue one · new · back")
 }
 
 func openAgent(c *conn, name string) {
@@ -366,23 +367,54 @@ func openAgent(c *conn, name string) {
 	showAgent(c)
 }
 
-func selectNumber(c *conn, n int) {
-	if n < 1 || n > len(c.choices) {
-		if len(c.choices) == 0 {
-			fmt.Println("nothing to select — type: help")
-			return
-		}
-		fmt.Printf("pick a number between 1 and %d\n", len(c.choices))
+// selectAgent opens the agent at position n on the last main menu.
+func selectAgent(c *conn, n int) {
+	if len(c.numbered) == 0 {
+		fmt.Println("numbers apply to the agent list — type: agents")
 		return
 	}
-	ch := c.choices[n-1]
-	switch ch.kind {
-	case "agent":
-		openAgent(c, ch.agent)
-	case "session":
-		openAgent(c, ch.agent)
-		c.sessions[ch.agent] = ch.session
-		fmt.Printf("\nsession %s resumed — type a message\n", shortID(ch.session))
+	if n < 1 || n > len(c.numbered) {
+		fmt.Printf("pick an agent number between 1 and %d\n", len(c.numbered))
+		return
+	}
+	openAgent(c, c.numbered[n-1])
+}
+
+// resumeByID continues the conversation whose id — or unambiguous id prefix —
+// matches, using whatever was printed last. It reports whether it handled the
+// input, so an unrecognised line can still be sent as a message.
+func resumeByID(c *conn, token string) bool {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false
+	}
+	type hit struct {
+		agent string
+		s     client.SessionInfo
+	}
+	var hits []hit
+	for agent, list := range c.listed {
+		for _, s := range list {
+			if s.ID == token || strings.HasPrefix(s.ID, token) {
+				hits = append(hits, hit{agent: agent, s: s})
+			}
+		}
+	}
+	switch len(hits) {
+	case 0:
+		return false
+	case 1:
+		h := hits[0]
+		openAgent(c, h.agent)
+		c.sessions[h.agent] = h.s.ID
+		fmt.Printf("\nconversation %s resumed — type a message\n", shortID(h.s.ID))
+		return true
+	default:
+		fmt.Println("that id is ambiguous:")
+		for _, h := range hits {
+			fmt.Printf("  %s  %s\n", shortID(h.s.ID), h.agent)
+		}
+		return true
 	}
 }
 
@@ -398,16 +430,25 @@ func newSession(c *conn, agent string) {
 	fmt.Printf("\nconversation %s started — type a message\n", shortID(info.ID))
 }
 
-func resumeSession(c *conn) {
-	fmt.Print("number from the list: ")
-	var raw string
-	fmt.Scanln(&raw)
-	n, err := strconv.Atoi(strings.TrimSpace(raw))
-	if err != nil {
-		fmt.Println("pick a number from the list")
+// resumeSession continues a conversation named by id. With no id it lists the
+// ones the screen last showed, so the caller can pick one by copying its id.
+func resumeSession(c *conn, id string) {
+	if id == "" {
+		list := c.listed[c.agent]
+		if len(list) == 0 {
+			fmt.Println("no conversations listed — type: sessions")
+			return
+		}
+		fmt.Println("copy an id:")
+		for _, s := range list {
+			fmt.Printf("  %s  %s\n", shortID(s.ID), describe(s))
+		}
+		fmt.Println("then type: resume <id>")
 		return
 	}
-	selectNumber(c, n)
+	if !resumeByID(c, id) {
+		fmt.Printf("no conversation %q in the list — type: sessions\n", id)
+	}
 }
 
 func latestSession(c *conn) {

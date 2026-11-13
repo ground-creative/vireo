@@ -117,8 +117,9 @@ nginx or Caddy cannot terminate it.
 
 ## DNS discovery
 
-Peers resolve `_vireo._tcp.<domain>` first, then fall back to port 7777.
-Publishing the record lets them find a non-default port without configuration:
+A peer given a bare domain resolves `_vireo._tcp.<domain>`. That record is the
+only thing consulted — no port is assumed — so publishing it is what makes
+`connect example.com` work:
 
 ```
 _vireo._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
