@@ -22,14 +22,7 @@ import (
 	"vireo/internal/client"
 )
 
-// banner is printed once at startup so the tool says what it is.
-const banner = `vireocli — raw protocol client for a vireo daemon.
-
-This is not an AI and it does not talk back: it sends what you type to the
-daemon and prints what the daemon answers. The backend behind the daemon may
-be a demo, in which case its replies are canned. For a real assistant, connect
-an AI host through the MCP bridge instead.`
-
+// conn is the shell's connection plus its mode state.
 type conn struct {
 	*client.Client
 	addr     string
@@ -79,10 +72,6 @@ func main() {
 		fmt.Printf("usage: vireocli <host>   — or type: connect <host>   (e.g. connect localhost)\n")
 	}
 
-	fmt.Println()
-	fmt.Println(banner)
-	fmt.Println()
-
 	in := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print(prompt(c))
@@ -120,6 +109,12 @@ func main() {
 
 		if c.Client == nil {
 			fmt.Println("not connected — type: connect <host>")
+			continue
+		}
+
+		// Numbers select from whatever the last screen listed.
+		if n, err := strconv.Atoi(cmd); err == nil {
+			selectNumber(c, n)
 			continue
 		}
 
@@ -183,6 +178,39 @@ func main() {
 		}
 		sendMessage(c, line)
 	}
+}
+
+// selectNumber picks from whatever the last screen listed: agents at the
+// endpoint, sessions once an agent is open.
+func selectNumber(c *conn, n int) {
+	if c.agent == "" {
+		agents := c.Agents()
+		if n < 1 || n > len(agents) {
+			fmt.Printf("pick a number between 1 and %d\n", len(agents))
+			return
+		}
+		openAgent(c, agents[n-1].Name)
+		return
+	}
+	list := c.listed[c.agent]
+	if len(list) == 0 {
+		fmt.Println("no sessions yet — type: new")
+		return
+	}
+	if n < 1 || n > len(list) {
+		fmt.Printf("pick a number between 1 and %d\n", len(list))
+		return
+	}
+	c.sessions[c.agent] = list[n-1].ID
+	fmt.Printf("\nsession %s resumed\n", shortID(list[n-1].ID))
+}
+
+// shortID trims a session id for display.
+func shortID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
 }
 
 func doConnect(opts client.Options, host string) (*conn, error) {
