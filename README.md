@@ -12,30 +12,57 @@ Connecting an AI assistant to a service today means one of three bad options: sc
 
 vireo replaces that with a single daemon per domain, advertised via a standard DNS SRV record (`_vireo._tcp.<domain>`). When a client connects, vireo listens on one port (TLS 1.3 and QUIC), serves a runtime manifest of the domain's available agents, and routes multi-turn conversations inside durable sessions to one HTTP webhook—leaving your backend in full control of execution. One DNS lookup per domain, one bridge per AI host, and zero per-vendor client config.
 
-## Quick Start
+## Install
+
+Build from source (Go 1.22+):
 
 ```bash
 git clone https://github.com/ground-creative/vireo.git
 cd vireo
 go build -o vireo .
-go build -o vireocli ./cmd/vireocli
-go build -o fakeagent ./cmd/fakeagent
 ```
 
-Three terminals:
+That is the whole thing. `vireo` is the daemon; nothing else is required to run
+it, and no AI, model or API key is involved.
+
+Optional binaries:
 
 ```bash
-./fakeagent            # 1. demo backend on :8088
+go build -o vireo-chat ./cmd/vireo-chat    # chat client, for talking to a daemon by hand
+go build -o fakeagent  ./cmd/fakeagent     # stub backend, used only by the demo below
+```
+
+Docker:
+
+```bash
+docker build -t vireo .
+docker run --rm -p 7777:7777/tcp -p 7777:7777/udp \
+  -v "$PWD/config:/app/config:ro" \
+  -v "$PWD/sessions:/app/sessions" \
+  vireo --config demo
+```
+
+Both protocols must be published: `7777/tcp` for TLS, `7777/udp` for QUIC.
+
+## Demo
+
+Optional. It runs a stub backend so you can see the wire path end to end without
+writing one. `fakeagent` is not part of a deployment — a real install points
+`transport` at your own service and never needs it.
+
+```bash
+./fakeagent            # 1. stub backend on :8088
 ./vireo --config demo  # 2. daemon, TLS + QUIC on :7777
-./vireocli -id me      # 3. peer
+./vireo-chat           # 3. client
 ```
 
-`--config` is required; the daemon only reads YAML from `config/`.
+`--config` is required; the daemon only reads YAML from `config/`. The client
+generates its identity once and reuses it, so conversations survive between runs.
 
 ```
-$ ./vireocli -id me
-client id: me
-vireo> connect localhost
+$ ./vireo-chat
+client id: vireo_4f1c8a2e9b7d4c0fa1e2d3b4c5a6f7e8 (/home/you/.config/vireo/client-id)
+> connect localhost
 connected to localhost:7777 (well-known port)
 
 agents:
@@ -43,13 +70,14 @@ agents:
   2) reservations   Check availability, book a table and cancel a booking [conversation]
   3) concierge      Answer anything else: hours, directions, general questions [conversation]
 
+type a number or an agent name — help for commands
 vireo> 1
 orders — Take food orders: pizzas, sides, drinks, pickup or delivery
 
-no sessions yet — type: new
+no conversations yet — type: new
 orders> new
 
-session 4f1c8a2e opened
+conversation 4f1c8a2e started — type a message
 orders[4f1c8a2e]> hi, I want to order a pizza
 
 This is not an AI. No model runs behind this endpoint — the daemon, the session
@@ -58,9 +86,44 @@ their webhooks in config/.
    [open · turn 1] "demo reply"
 ```
 
-The bundled backend is a stub: it returns one of a few fixed lines so the wire
-path can be exercised without a model. Numbers select from the current screen;
-`sessions` lists what you already started; `help` lists the rest.
+Numbers select from the current screen. `back` returns to the main menu, which
+lists every conversation you already have — a number there resumes it.
+
+## Configuration
+
+```yaml
+server:
+  port: 7777
+  cert_file: "certs/cert.pem"
+  key_file: "certs/key.pem"
+  endpoint:
+    id: "restaurant"
+    name: "restaurant"
+
+transport: "https://your-host.example/vireo/message"
+
+agents:
+  - name: "orders"
+    description: "Take food orders: pizzas, sides, drinks, pickup or delivery"
+    sessions: true
+```
+
+```bash
+./vireo --config restaurant    # reads config/restaurant.yaml
+./scripts/gen-certs.sh         # development certificate for localhost
+```
+
+Configs live in `config/`; anything outside it is refused. TLS 1.3 is required —
+there is no plaintext mode. Every key, default and inheritance rule is in
+[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+
+### DNS discovery
+
+Peers resolve `_vireo._tcp.<domain>` first, then fall back to port 7777:
+
+```
+_vireo._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
+```
 
 ## Connecting an AI (`vireo-mcp`)
 
@@ -141,36 +204,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 A non-2xx status surfaces as `upstream_error`; bodies are capped at 8 MiB; the
 per-agent `timeout` (default `30s`) bounds the call.
-
-## Configuration & DNS Discovery
-
-```yaml
-server:
-  port: 7777
-  cert_file: "certs/cert.pem"
-  key_file: "certs/key.pem"
-  endpoint:
-    id: "restaurant"
-    name: "restaurant"
-
-transport: "https://your-host.example/vireo/message"
-
-agents:
-  - name: "orders"
-    description: "Take food orders: pizzas, sides, drinks, pickup or delivery"
-    sessions: true
-```
-
-```bash
-./vireo --config restaurant    # reads config/restaurant.yaml
-./scripts/gen-certs.sh         # development certificate for localhost
-```
-
-Peers resolve `_vireo._tcp.<domain>` first, then fall back to port 7777:
-
-```
-_vireo._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
-```
 
 ## Documentation
 

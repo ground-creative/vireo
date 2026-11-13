@@ -8,7 +8,12 @@
 package protocol
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"regexp"
 	"time"
 )
 
@@ -77,13 +82,38 @@ const (
 	SessionOpPrune = "session.prune"
 )
 
-// MaxClientIDLength bounds the client id accepted at negotiate. The id is the
-// identity sessions are scoped by, so a short or guessable one is refused.
-const MaxClientIDLength = 128
+// ClientIDPrefix starts every client id.
+const ClientIDPrefix = "vireo_"
 
-// MinClientIDLength is the shortest client id accepted. Peers generate the id
-// once and keep it: the daemon has no accounts, so the id is the identity.
-const MinClientIDLength = 16
+// ClientIDHexLength is the number of hex characters after the prefix: 16
+// random bytes, so two peers colliding is not a practical concern.
+const ClientIDHexLength = 32
+
+// ClientIDPattern is the exact shape a client id must have: the prefix, then
+// 32 lowercase hex characters. Nothing else is accepted — the id is the
+// identity that sessions are scoped by, so it is not free-form text.
+var ClientIDPattern = regexp.MustCompile(`^vireo_[0-9a-f]{32}$`)
+
+// NewClientID mints a client id in the accepted shape.
+func NewClientID() (string, error) {
+	b := make([]byte, ClientIDHexLength/2)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("mint client id: %w", err)
+	}
+	return ClientIDPrefix + hex.EncodeToString(b), nil
+}
+
+// ValidateClientID reports why an id is not acceptable, or nil when it is.
+func ValidateClientID(id string) error {
+	if id == "" {
+		return errors.New("a client id is required")
+	}
+	if !ClientIDPattern.MatchString(id) {
+		return fmt.Errorf("must match %s (prefix %q then %d lowercase hex characters)",
+			ClientIDPattern.String(), ClientIDPrefix, ClientIDHexLength)
+	}
+	return nil
+}
 
 // ClientInfo identifies the caller. ID is required; name and version are
 // informational.

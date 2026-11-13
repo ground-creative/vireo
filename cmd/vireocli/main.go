@@ -12,8 +12,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"os"
@@ -24,6 +22,7 @@ import (
 	"time"
 
 	"vireo/internal/client"
+	"vireo/internal/protocol"
 )
 
 // choice is one numbered item on the current screen.
@@ -212,14 +211,19 @@ func clientIDPath() string {
 }
 
 // loadOrCreateClientID reuses the stored id, or mints one and stores it 0600.
+// A stored id that does not match the protocol's pattern is replaced, so the
+// file can be deleted (or hand-edited) to start as somebody else.
 func loadOrCreateClientID() (id, path string, err error) {
 	path = clientIDPath()
 	if b, rerr := os.ReadFile(path); rerr == nil {
-		if stored := strings.TrimSpace(string(b)); checkClientID(stored) == nil {
+		if stored := strings.TrimSpace(string(b)); protocol.ValidateClientID(stored) == nil {
 			return stored, path, nil
 		}
 	}
-	id = mintHex(16)
+	id, err = protocol.NewClientID()
+	if err != nil {
+		return "", path, err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return "", path, fmt.Errorf("create %s: %w", filepath.Dir(path), err)
 	}
@@ -229,31 +233,13 @@ func loadOrCreateClientID() (id, path string, err error) {
 	return id, path, nil
 }
 
-// checkClientID mirrors the daemon's rule, so a bad id fails here with a clear
-// message instead of on the wire.
+// checkClientID uses the same rule the daemon enforces, so a bad -id fails
+// here with a clear message instead of on the wire.
 func checkClientID(id string) error {
-	if len(id) < 16 {
-		return fmt.Errorf("must be at least 16 characters (generate one, or drop -id)")
-	}
-	if len(id) > 128 {
-		return fmt.Errorf("must be at most 128 characters")
-	}
-	for _, r := range id {
-		ok := r == '-' || r == '_' ||
-			(r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
-		if !ok {
-			return fmt.Errorf("may only contain letters, digits, '-' and '_'")
-		}
+	if err := protocol.ValidateClientID(id); err != nil {
+		return fmt.Errorf("%v — drop -id to generate one", err)
 	}
 	return nil
-}
-
-func mintHex(n int) string {
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		return "vireocli-fallback-identity"
-	}
-	return hex.EncodeToString(b)
 }
 
 // --- screens ---------------------------------------------------------------

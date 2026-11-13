@@ -225,25 +225,9 @@ func (c *connState) handshake() error {
 		return fmt.Errorf("unsupported protocol %q", req.Protocol)
 	}
 	id := strings.TrimSpace(req.Client.ID)
-	if id == "" {
-		c.writeError(f.StreamID, protocol.CodeBadClientID, "a client id is required: send {\"client\":{\"id\":\"your-unique-id\"}} in negotiate")
-		return errors.New("negotiate without client id")
-	}
-	if len(id) < protocol.MinClientIDLength {
-		c.writeError(f.StreamID, protocol.CodeBadClientID, fmt.Sprintf("client id must be at least %d characters — generate one and keep it", protocol.MinClientIDLength))
-		return fmt.Errorf("client id too short (%d)", len(id))
-	}
-	if len(id) > protocol.MaxClientIDLength {
-		c.writeError(f.StreamID, protocol.CodeBadClientID, fmt.Sprintf("client id must be at most %d characters", protocol.MaxClientIDLength))
-		return fmt.Errorf("client id too long (%d)", len(id))
-	}
-	for _, r := range id {
-		ok := r == '-' || r == '_' ||
-			(r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
-		if !ok {
-			c.writeError(f.StreamID, protocol.CodeBadClientID, "client id may only contain letters, digits, '-' and '_'")
-			return fmt.Errorf("client id contains %q", r)
-		}
+	if err := protocol.ValidateClientID(id); err != nil {
+		c.writeError(f.StreamID, protocol.CodeBadClientID, err.Error())
+		return fmt.Errorf("client id %q: %w", id, err)
 	}
 	c.clientID = id
 	c.clientName = req.Client.Name

@@ -64,15 +64,15 @@ agents:
 
 ## `server`
 
-| Key | Type | Default | Meaning |
-|---|---|---|---|
-| `port` | int | — | TCP and UDP port; unset means the OS assigns one |
-| `cert_file` | string | — | PEM certificate chain |
-| `key_file` | string | — | PEM private key |
-| `alpn` | list | `["vireo/1"]` | negotiated protocols; `h3` is dropped with a warning |
-| `endpoint.id` | string | — | stable id peers see in the manifest |
-| `endpoint.name` | string | first agent name | display name |
-| `endpoint.description` | string | — | one-line description |
+| Key                    | Type   | Default          | Meaning                                              |
+| ---------------------- | ------ | ---------------- | ---------------------------------------------------- |
+| `port`                 | int    | —                | TCP and UDP port; unset means the OS assigns one     |
+| `cert_file`            | string | —                | PEM certificate chain                                |
+| `key_file`             | string | —                | PEM private key                                      |
+| `alpn`                 | list   | `["vireo/1"]`    | negotiated protocols; `h3` is dropped with a warning |
+| `endpoint.id`          | string | —                | stable id peers see in the manifest                  |
+| `endpoint.name`        | string | first agent name | display name                                         |
+| `endpoint.description` | string | —                | one-line description                                 |
 
 TLS 1.3 is required. There is no plaintext mode.
 
@@ -90,17 +90,17 @@ the manifest and can follow them without asking you.
 
 ## `session`
 
-| Key | Type | Default | Meaning |
-|---|---|---|---|
-| `list` | bool | `false` | advertise the `session.*` operations |
-| `ttl_default` | int (s) | `3600` | lifetime; slides on every message |
-| `length` | int | `32` | random characters per minted id |
-| `prefix` | string | `""` | id prefix |
-| `charset` | string | alnum + `_-` | characters used when minting |
-| `regex` | string | derived | validation rule for ids |
-| `store` | string | `file` | `file` or `memory`; anything else warns and falls back to `file` |
-| `file` | string | `vireo-sessions.json` | file name inside `sessions/` |
-| `retention` | duration | disabled | how long finished sessions are kept, e.g. `720h` |
+| Key           | Type     | Default               | Meaning                                                          |
+| ------------- | -------- | --------------------- | ---------------------------------------------------------------- |
+| `list`        | bool     | `false`               | advertise the `session.*` operations                             |
+| `ttl_default` | int (s)  | `3600`                | lifetime; slides on every message                                |
+| `length`      | int      | `32`                  | random characters per minted id                                  |
+| `prefix`      | string   | `""`                  | id prefix                                                        |
+| `charset`     | string   | alnum + `_-`          | characters used when minting                                     |
+| `regex`       | string   | derived               | validation rule for ids                                          |
+| `store`       | string   | `file`                | `file` or `memory`; anything else warns and falls back to `file` |
+| `file`        | string   | `vireo-sessions.json` | file name inside `sessions/`                                     |
+| `retention`   | duration | disabled              | how long finished sessions are kept, e.g. `720h`                 |
 
 `file` survives restarts (the map is rewritten atomically on every change);
 `memory` does not. Session state is bound to `sessions/`: `file` must be a bare
@@ -115,15 +115,15 @@ Mint rules are validated at startup, so a contradictory `prefix` / `charset` /
 
 ## `agents`
 
-| Key | Type | Default | Meaning |
-|---|---|---|---|
-| `name` | string | — | unique agent name; required |
-| `description` | string | — | what the agent handles — this is what an AI reads when choosing |
-| `sessions` | bool | `true` | whether the agent holds multi-turn conversations |
-| `transport` | string | top-level | this agent's webhook |
-| `timeout` | duration | `30s` | per-message backend timeout |
-| `refs` | map | — | static URLs for this agent |
-| `session` | block | inherits global | per-agent `ttl` and mint overrides |
+| Key           | Type     | Default         | Meaning                                                         |
+| ------------- | -------- | --------------- | --------------------------------------------------------------- |
+| `name`        | string   | —               | unique agent name; required                                     |
+| `description` | string   | —               | what the agent handles — this is what an AI reads when choosing |
+| `sessions`    | bool     | `true`          | whether the agent holds multi-turn conversations                |
+| `transport`   | string   | top-level       | this agent's webhook                                            |
+| `timeout`     | duration | `30s`           | per-message backend timeout                                     |
+| `refs`        | map      | —               | static URLs for this agent                                      |
+| `session`     | block    | inherits global | per-agent `ttl` and mint overrides                              |
 
 A conversational agent (`sessions: true`) requires a session id on every
 message; a stateless agent (`sessions: false`) answers single messages and

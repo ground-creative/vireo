@@ -36,13 +36,27 @@ The first frame on a connection must be `negotiate`:
 ```json
 {
   "protocol": "vireo/1",
-  "client": { "id": "me", "name": "vireocli", "version": "0.4" }
+  "client": {
+    "id": "vireo_4f1c8a2e9b7d4c0fa1e2d3b4c5a6f7e8",
+    "name": "vireo-chat",
+    "version": "0.4"
+  }
 }
 ```
 
-`client.id` is mandatory and at most 128 characters. An empty id is rejected
-with `bad_client_id`; a protocol other than `vireo/1` with `bad_protocol`. Any
-first frame of another type is `invalid_frame`.
+`client.id` is the identity sessions are scoped by, so its shape is fixed:
+
+```
+^vireo_[0-9a-f]{32}$
+```
+
+A `vireo_` prefix, then 32 lowercase hex characters — 128 random bits. Anything
+else is refused with `bad_client_id`: too short, wrong case, a UUID, an email
+address, `me`. Peers generate one once and keep it; only `vireo-mcp` and
+`vireo-chat` mint ids in practice.
+
+A protocol other than `vireo/1` is refused with `bad_protocol`. Any first frame
+of another type is `invalid_frame`.
 
 The daemon answers on the same stream with a `manifest`:
 
@@ -206,16 +220,16 @@ _vireo._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
 
 ## Error codes
 
-| Code               | When                                                       |
-| ------------------ | ---------------------------------------------------------- |
-| `bad_client_id`    | negotiate without a client id, or id longer than 128 chars |
-| `bad_protocol`     | negotiated protocol is not `vireo/1`                       |
-| `agent_not_found`  | no agent with that name                                    |
-| `session_required` | a conversational agent was addressed without a session     |
-| `unknown_session`  | the session id is unknown, closed, or another client's     |
-| `upstream_error`   | the webhook failed, timed out, or returned non-2xx         |
-| `invalid_frame`    | malformed frame or payload                                 |
-| `internal`         | anything unexpected                                        |
+| Code               | When                                                   |
+| ------------------ | ------------------------------------------------------ |
+| `bad_client_id`    | the client id does not match `^vireo_[0-9a-f]{32}$`    |
+| `bad_protocol`     | negotiated protocol is not `vireo/1`                   |
+| `agent_not_found`  | no agent with that name                                |
+| `session_required` | a conversational agent was addressed without a session |
+| `unknown_session`  | the session id is unknown, closed, or another client's |
+| `upstream_error`   | the webhook failed, timed out, or returned non-2xx     |
+| `invalid_frame`    | malformed frame or payload                             |
+| `internal`         | anything unexpected                                    |
 
 Errors arrive as an `error` frame on the caller's stream:
 
