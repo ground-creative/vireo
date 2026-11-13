@@ -77,8 +77,13 @@ const (
 	SessionOpPrune = "session.prune"
 )
 
-// MaxClientIDLength bounds the client id accepted at negotiate.
+// MaxClientIDLength bounds the client id accepted at negotiate. The id is the
+// identity sessions are scoped by, so a short or guessable one is refused.
 const MaxClientIDLength = 128
+
+// MinClientIDLength is the shortest client id accepted. Peers generate the id
+// once and keep it: the daemon has no accounts, so the id is the identity.
+const MinClientIDLength = 16
 
 // ClientInfo identifies the caller. ID is required; name and version are
 // informational.

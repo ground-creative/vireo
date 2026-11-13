@@ -1,25 +1,16 @@
 # vireo
 
-vireo is a Go daemon that gives a single domain one TLS 1.3 / QUIC front door,
-where AI assistants discover what a business offers and hold conversations with
-it over durable sessions.
+vireo is a Go daemon that gives any domain a TLS 1.3 / QUIC front door, discovered via DNS SRV (`_vireo._tcp.<domain>`), where AI assistants inspect a runtime manifest of exposed agents and converse with them over durable sessions.
 
-```
-AI host ──MCP──▶ vireo-mcp ──vireo/1──▶ vireo ──HTTP POST──▶ your backend
+```text
+AI host ──MCP──▶ vireo-mcp ──[DNS SRV + vireo/1]──▶ vireo ──HTTP POST──▶ your backend
 ```
 
 ## What it does
 
-Connecting an AI assistant to a service today means one of three bad options:
-scrape the site, write custom API glue for every assistant, or install a
-separate MCP server for every vendor you want to reach. None of them scale past
-the first integration, and none of them give you discovery or multi-turn state.
+Connecting an AI assistant to a service today means one of three bad options: scrape the site, write custom API glue for every assistant, or install a separate MCP server for every vendor you want to reach. None of them scale past the first integration, and none of them give you runtime discovery or multi-turn state.
 
-vireo replaces that with one daemon per domain. It listens on a single port,
-publishes what the business offers as a runtime manifest, and carries each
-conversation in a session it mints — while the business keeps control of
-execution behind one HTTP webhook. One front door per domain, one bridge per AI
-host, and no per-vendor client code.
+vireo replaces that with a single daemon per domain, advertised via a standard DNS SRV record (`_vireo._tcp.<domain>`). When a client connects, vireo listens on one port (TLS 1.3 and QUIC), serves a runtime manifest of the domain's available agents, and routes multi-turn conversations inside durable sessions to one HTTP webhook—leaving your backend in full control of execution. One DNS lookup per domain, one bridge per AI host, and zero per-vendor client config.
 
 ## Quick Start
 
@@ -97,6 +88,7 @@ The host then connects to a domain by name; the bridge resolves it, reads the
 manifest and lists the agents.
 
 <!-- TODO: no public daemon yet. Replace with the real demo hostname once deployed. -->
+
 **Live demo:** not deployed yet. When it is, it will be reachable as
 `connect demo.vireo.dev`, discovered through `_vireo._tcp.demo.vireo.dev`.
 
