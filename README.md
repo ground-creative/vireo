@@ -48,42 +48,6 @@ arrives inside that authenticated connection — so the certificate at the SRV
 target has to cover the queried domain, which is the name the client sends as
 `ServerName`.
 
-## Try it
-
-Build from source (Go 1.22+):
-
-```bash
-git clone https://github.com/ground-creative/vireo.git
-cd vireo
-go build -o vireo .
-```
-
-That is the whole thing. `vireo` is the daemon; nothing else is required to run
-it, and no AI, model or API key is involved.
-
-Tagged releases with prebuilt binaries for Linux and macOS (amd64, arm64) are
-intended so you can skip the Go toolchain — nothing is published yet, so build
-from source for now.
-
-Optional binaries:
-
-```bash
-go build -o vireo-chat ./cmd/vireo-chat    # chat client, for talking to a daemon by hand
-go build -o fakeagent  ./cmd/fakeagent     # stub backend, used only by the demo below
-```
-
-Docker:
-
-```bash
-docker build -t vireo .
-docker run --rm -p 7777:7777/tcp -p 7777:7777/udp \
-  -v "$PWD/config:/app/config:ro" \
-  -v "$PWD/sessions:/app/sessions" \
-  vireo --config demo
-```
-
-Both protocols must be published: `7777/tcp` for TLS, `7777/udp` for QUIC.
-
 ## Demo
 
 An assistant asks the business a question in plain language and gets an answer —
@@ -108,6 +72,42 @@ Yes — everything north of the river, with same-day slots before 11am.
 Then keep asking: the conversation is a session, so a follow-up carries the
 thread instead of starting over. Swap the agents for a restaurant, a clinic or a
 booking desk and the shape is the same — the answers come from the business.
+
+## Try it yourself
+
+Build from source (Go 1.22+):
+
+```bash
+git clone https://github.com/ground-creative/vireo.git
+cd vireo
+go build -o vireo .
+```
+
+That is the whole thing. `vireo` is the daemon; nothing else is required to run
+it, and no AI, model or API key is involved.
+
+Tagged releases with prebuilt binaries for Linux and macOS (amd64, arm64) are
+intended so you can skip the Go toolchain — nothing is published yet, so build
+from source for now.
+
+Optional binaries:
+
+```bash
+go build -o vireo-chat ./cmd/vireo-chat    # chat client, for talking to a daemon by hand
+go build -o fakeagent  ./cmd/fakeagent     # stub backend, used only by the local run below
+```
+
+Docker:
+
+```bash
+docker build -t vireo .
+docker run --rm -p 7777:7777/tcp -p 7777:7777/udp \
+  -v "$PWD/config:/app/config:ro" \
+  -v "$PWD/sessions:/app/sessions" \
+  vireo --config demo
+```
+
+Both protocols must be published: `7777/tcp` for TLS, `7777/udp` for QUIC.
 
 ### Run it locally
 
