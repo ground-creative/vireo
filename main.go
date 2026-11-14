@@ -38,11 +38,12 @@ type config struct {
 }
 
 type serverConf struct {
-	Port     int          `yaml:"port"`
-	CertFile string       `yaml:"cert_file"`
-	KeyFile  string       `yaml:"key_file"`
-	ALPN     []string     `yaml:"alpn"`
-	Endpoint endpointConf `yaml:"endpoint"`
+	Port        int          `yaml:"port"`
+	CertFile    string       `yaml:"cert_file"`
+	KeyFile     string       `yaml:"key_file"`
+	ALPN        []string     `yaml:"alpn"`
+	CallTimeout string       `yaml:"call_timeout"`
+	Endpoint    endpointConf `yaml:"endpoint"`
 }
 
 type endpointConf struct {
@@ -91,7 +92,6 @@ type agentConf struct {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-
 	configName := flag.String("config", "", "config name inside config/ (required, e.g. demo)")
 	flag.Parse()
 
@@ -133,7 +133,7 @@ func main() {
 		Sessions:     store,
 		ListSessions: cfg.Session.List,
 		Retention:    retention,
-		CallTimeout:  30 * time.Second,
+		CallTimeout:  callTimeout(cfg),
 		Logger:       log.Default(),
 	})
 
@@ -177,6 +177,10 @@ func main() {
 // in one place is what makes the repo ignore personal files (config/*) while
 // committing the demo (config/demo.yaml).
 const configDir = "config"
+
+// defaultAgentTimeout is the per-agent webhook timeout when the config does
+// not set one.
+const defaultAgentTimeout = 30 * time.Second
 
 // resolveConfigPath maps a config name to the file to load. "demo",
 // "demo.yaml" and "config/demo.yaml" all mean the same file. Anything outside
@@ -343,6 +347,32 @@ func buildTLS(c *serverConf) (*tls.Config, error) {
 	}, nil
 }
 
+// callTimeout is the deadline the daemon puts on one agent call. Without an
+// explicit server.call_timeout it is derived from the longest per-agent
+// timeout plus slack, so configuring a slow agent is enough to make the call
+// survive: a hardcoded cap would silently cut a model-backed agent short.
+func callTimeout(cfg *config) time.Duration {
+	longest := defaultAgentTimeout
+	for _, a := range cfg.Agents {
+		if strings.TrimSpace(a.Timeout) == "" {
+			continue
+		}
+		d, err := time.ParseDuration(a.Timeout)
+		if err == nil && d > longest {
+			longest = d
+		}
+	}
+	derived := longest + 15*time.Second
+	if strings.TrimSpace(cfg.Server.CallTimeout) == "" {
+		return derived
+	}
+	d, err := time.ParseDuration(cfg.Server.CallTimeout)
+	if err != nil || d <= 0 {
+		return derived
+	}
+	return d
+}
+
 // buildRegistry turns agent config into clients and resolves inheritance
 // (transport, sessions, ttl, mint rules), collecting warnings instead of
 // failing startup for one bad entry. It also assembles the manifest.
@@ -420,7 +450,7 @@ func buildRegistry(cfg *config) (*upstream.Registry, protocol.Manifest, []string
 			}
 		}
 
-		timeout := 30 * time.Second
+		timeout := defaultAgentTimeout
 		if strings.TrimSpace(a.Timeout) != "" {
 			d, err := time.ParseDuration(a.Timeout)
 			if err != nil {

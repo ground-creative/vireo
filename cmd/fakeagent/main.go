@@ -18,6 +18,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -99,6 +100,28 @@ func handleMessage(w http.ResponseWriter, r *http.Request) {
 	if _, ok := known[req.Agent]; !ok {
 		w.WriteHeader(http.StatusNotFound)
 		send(w, map[string]string{"error": "unknown agent " + req.Agent})
+		return
+	}
+
+	// Demo the streaming path: say something first, then answer. A backend that
+	// can emit progress should do exactly this when it knows a turn will be
+	// slow — the client shows the line while it waits.
+	if strings.Contains(r.Header.Get("Accept"), "application/x-ndjson") {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.WriteHeader(http.StatusOK)
+		flusher, _ := w.(http.Flusher)
+		_, _ = w.Write([]byte(`{"partial":"consulting the kitchen…"}` + "\n"))
+		if flusher != nil {
+			flusher.Flush()
+		}
+		time.Sleep(300 * time.Millisecond)
+		mu.Lock()
+		line := replies[rng.Intn(len(replies))]
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"reply":   line,
+			"session": map[string]any{"summary": "demo reply"},
+		})
 		return
 	}
 

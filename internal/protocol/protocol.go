@@ -23,9 +23,13 @@ const Version = "vireo/1"
 
 // Frame types.
 const (
-	TypeMessage   uint8 = 0x01
-	TypeData      uint8 = 0x02
-	TypeEnd       uint8 = 0x03
+	TypeMessage uint8 = 0x01
+	TypeData    uint8 = 0x02
+	TypeEnd     uint8 = 0x03
+	// TypePartial carries progress inside a turn: text the agent wants shown
+	// while it is still working. It never ends the turn and never counts as
+	// one; TypeEnd still follows.
+	TypePartial   uint8 = 0x04
 	TypeError     uint8 = 0x05
 	TypeNegotiate uint8 = 0x10
 	TypeManifest  uint8 = 0x11
@@ -41,6 +45,8 @@ func TypeName(t uint8) string {
 		return "data"
 	case TypeEnd:
 		return "end"
+	case TypePartial:
+		return "partial"
 	case TypeError:
 		return "error"
 	case TypeNegotiate:
@@ -186,6 +192,16 @@ type SessionUpdate struct {
 type MessageResponse struct {
 	Reply   string         `json:"reply,omitempty"`
 	Session *SessionUpdate `json:"session,omitempty"`
+}
+
+// PartialPayload is the payload of a partial frame: something to show while the
+// turn is still running. Kind is "status" for an ephemeral line ("fetching the
+// site…"); Seq orders the frames within one turn. Chunks of the final reply can
+// reuse the same frame with Kind "chunk", which the current clients ignore.
+type PartialPayload struct {
+	Kind string `json:"kind"`
+	Seq  int    `json:"seq,omitempty"`
+	Text string `json:"text"`
 }
 
 // EndPayload terminates one exchange; it carries the updated session envelope

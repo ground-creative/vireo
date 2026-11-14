@@ -6,7 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"vireo/internal/protocol"
 )
 
 // recorder is a backend that remembers every request body it received.
@@ -109,5 +112,78 @@ func TestStartMessageIsEmptyWhenNotConfigured(t *testing.T) {
 	}
 	if got := client.StartMessage(); got != "" {
 		t.Errorf("StartMessage() = %q, want it empty", got)
+	}
+}
+
+// A backend that answers with newline-delimited JSON can say "hold on" before
+// the reply; each partial line reaches OnPartial in order, and the final line
+// is the reply.
+func TestSendStreamsPartialLines(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Accept"); !strings.Contains(got, "application/x-ndjson") {
+			t.Errorf("Accept = %q, want it to offer ndjson", got)
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = io.WriteString(w, `{"partial":"fetching your site…"}`+"\n")
+		_, _ = io.WriteString(w, `{"partial":"building the assistant…"}`+"\n")
+		_, _ = io.WriteString(w, `{"reply":"done","session":{"summary":"created"}}`+"\n")
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := New(Spec{Name: "creator", Transport: srv.URL, Sessions: true})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	var got []string
+	resp, err := client.Send(context.Background(), Call{
+		Message:   "build me one",
+		SessionID: "abc",
+		OnPartial: func(p protocol.PartialPayload) {
+			if p.Kind != "status" {
+				t.Errorf("kind = %q, want status", p.Kind)
+			}
+			got = append(got, p.Text)
+		},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	want := []string{"fetching your site…", "building the assistant…"}
+	if len(got) != len(want) {
+		t.Fatalf("partials = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("partial[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	if resp.Reply != "done" {
+		t.Errorf("reply = %q, want %q", resp.Reply, "done")
+	}
+	if resp.Session == nil || resp.Session.Summary != "created" {
+		t.Errorf("session = %+v, want summary %q", resp.Session, "created")
+	}
+}
+
+// A plain JSON backend is unaffected: no partials, same reply.
+func TestSendStillAcceptsWholeBodyJSON(t *testing.T) {
+	rec := &recorder{}
+	srv := rec.backend(t)
+	client, err := New(Spec{Name: "orders", Transport: srv.URL, Sessions: true})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	called := false
+	resp, err := client.Send(context.Background(), Call{Message: "hi", OnPartial: func(protocol.PartialPayload) { called = true }})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if called {
+		t.Error("OnPartial was called for a non-streaming backend")
+	}
+	if resp.Reply != "ok" {
+		t.Errorf("reply = %q, want %q", resp.Reply, "ok")
 	}
 }

@@ -6,6 +6,7 @@
 package upstream
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -32,6 +33,9 @@ type Call struct {
 	// turn of a conversation so the backend knows what was already said. It
 	// is empty on every later turn.
 	InitialAssistantMessage string
+	// OnPartial receives the progress lines a streaming backend emits while it
+	// works. It is called from Send's goroutine and may be nil.
+	OnPartial func(protocol.PartialPayload)
 }
 
 // Client is one agent behind the endpoint.
@@ -145,7 +149,7 @@ func (w *webhook) Send(ctx context.Context, call Call) (protocol.MessageResponse
 		return protocol.MessageResponse{}, fmt.Errorf("upstream %s: %w", w.name, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", "application/x-ndjson, application/json")
 	req.Header.Set("X-Vireo-Protocol", protocol.Version)
 	req.Header.Set("X-Vireo-Agent", w.name)
 	if call.SessionID != "" {
@@ -157,6 +161,17 @@ func (w *webhook) Send(ctx context.Context, call Call) (protocol.MessageResponse
 		return protocol.MessageResponse{}, fmt.Errorf("upstream %s: %w", w.name, err)
 	}
 	defer resp.Body.Close()
+
+	// A backend that wants to say "hold on" before it is done answers with
+	// newline-delimited JSON: {"partial": "…"} lines, then the final
+	// {reply, session}. Anything else takes the plain whole-body path.
+	if strings.Contains(resp.Header.Get("Content-Type"), "application/x-ndjson") {
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			data, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+			return protocol.MessageResponse{}, fmt.Errorf("upstream %s: %s: %s", w.name, resp.Status, snippet(data))
+		}
+		return w.readStream(resp.Body, call.OnPartial)
+	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
@@ -177,6 +192,45 @@ func (w *webhook) Send(ctx context.Context, call Call) (protocol.MessageResponse
 		return protocol.MessageResponse{Reply: text}, nil
 	}
 	return protocol.MessageResponse{Reply: strings.TrimSpace(string(data))}, nil
+}
+
+// readStream consumes a newline-delimited backend answer. Each line may carry a
+// progress message, the final reply, or both; the turn ends when the body does.
+// Progress is delivered as it arrives, so the caller can show it immediately —
+// that is what keeps a long model call from looking like a hang.
+func (w *webhook) readStream(body io.Reader, onPartial func(protocol.PartialPayload)) (protocol.MessageResponse, error) {
+	var out protocol.MessageResponse
+	seq := 0
+	sc := bufio.NewScanner(body)
+	sc.Buffer(make([]byte, 0, 64<<10), maxResponseBytes)
+	for sc.Scan() {
+		line := bytes.TrimSpace(sc.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var chunk struct {
+			Partial string                  `json:"partial,omitempty"`
+			Reply   string                  `json:"reply,omitempty"`
+			Session *protocol.SessionUpdate `json:"session,omitempty"`
+		}
+		if err := json.Unmarshal(line, &chunk); err != nil {
+			return protocol.MessageResponse{}, fmt.Errorf("upstream %s: stream line %s: %w", w.name, snippet(line), err)
+		}
+		if chunk.Partial != "" {
+			seq++
+			if onPartial != nil {
+				onPartial(protocol.PartialPayload{Kind: "status", Seq: seq, Text: chunk.Partial})
+			}
+			continue
+		}
+		if chunk.Reply != "" || chunk.Session != nil {
+			out = protocol.MessageResponse{Reply: chunk.Reply, Session: chunk.Session}
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return protocol.MessageResponse{}, fmt.Errorf("upstream %s: read stream: %w", w.name, err)
+	}
+	return out, nil
 }
 
 func snippet(b []byte) string {

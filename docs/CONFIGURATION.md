@@ -115,16 +115,16 @@ Mint rules are validated at startup, so a contradictory `prefix` / `charset` /
 
 ## `agents`
 
-| Key           | Type     | Default         | Meaning                                                         |
-| ------------- | -------- | --------------- | --------------------------------------------------------------- |
-| `name`        | string   | —               | unique agent name; required                                     |
-| `description` | string   | —               | what the agent handles — this is what an AI reads when choosing |
-| `sessions`    | bool     | `true`          | whether the agent holds multi-turn conversations                |
-| `transport`   | string   | top-level       | this agent's webhook                                            |
-| `timeout`     | duration | `30s`           | per-message backend timeout                                     |
-| `start_message` | string | —               | greeting returned at session creation                           |
-| `refs`        | map      | —               | static URLs for this agent                                      |
-| `session`     | block    | inherits global | per-agent `ttl` and mint overrides                              |
+| Key             | Type     | Default         | Meaning                                                         |
+| --------------- | -------- | --------------- | --------------------------------------------------------------- |
+| `name`          | string   | —               | unique agent name; required                                     |
+| `description`   | string   | —               | what the agent handles — this is what an AI reads when choosing |
+| `sessions`      | bool     | `true`          | whether the agent holds multi-turn conversations                |
+| `transport`     | string   | top-level       | this agent's webhook                                            |
+| `timeout`       | duration | `30s`           | per-message backend timeout                                     |
+| `start_message` | string   | —               | greeting returned at session creation                           |
+| `refs`          | map      | —               | static URLs for this agent                                      |
+| `session`       | block    | inherits global | per-agent `ttl` and mint overrides                              |
 
 A conversational agent (`sessions: true`) requires a session id on every
 message; a stateless agent (`sessions: false`) answers single messages and

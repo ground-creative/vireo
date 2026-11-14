@@ -27,7 +27,7 @@ transport: "http://127.0.0.1:8088/vireo/message"
 # Static URLs a peer can follow. Advertised in the manifest under "refs".
 refs:
   menu: "http://127.0.0.1:8088/menu"
-  docs: "https://github.com/your-org/your-service"
+  docs: "http://127.0.0.1:8088/wiki"
 
 session:
   list: true                            # advertise the session.* commands

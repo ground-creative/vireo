@@ -322,10 +322,23 @@ func (c *connState) forward(stream uint32, client upstream.Client, req protocol.
 		greeting = client.StartMessage()
 	}
 	started := time.Now()
+	seq := 0
 	resp, err := client.Send(ctx, upstream.Call{
 		Message:                 req.Message,
 		SessionID:               sessionID,
 		InitialAssistantMessage: greeting,
+		// Progress the backend sends while it works is forwarded at once as a
+		// partial frame: the caller can show "hold on…" without the turn
+		// ending. TypeEnd still follows, and only that counts as a turn.
+		OnPartial: func(p protocol.PartialPayload) {
+			seq++
+			p.Seq = seq
+			payload, err := json.Marshal(p)
+			if err != nil {
+				return
+			}
+			_ = c.write(frame.Frame{StreamID: stream, Type: protocol.TypePartial, Payload: payload})
+		},
 	})
 	if err != nil {
 		c.srv.log.Printf("[%s] message stream=%d agent=%q failed in %s: %v",

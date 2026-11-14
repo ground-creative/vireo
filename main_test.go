@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // A YAML entry without a name must be reported with its index, so a broken
@@ -124,6 +125,26 @@ func TestBuildRegistryCarriesTheStartMessage(t *testing.T) {
 	}
 	if got := client.StartMessage(); got != "Hello there" {
 		t.Errorf("client start message = %q, want %q", got, "Hello there")
+	}
+}
+
+// The call deadline follows the slowest agent, so a model-backed agent is not
+// cut off by a hardcoded ceiling; an explicit server.call_timeout wins.
+func TestCallTimeoutFollowsTheSlowestAgent(t *testing.T) {
+	cfg := &config{
+		Transport: "http://127.0.0.1:8088/vireo/message",
+		Agents: []agentConf{
+			{Name: "fast"},
+			{Name: "slow", Timeout: "120s"},
+		},
+	}
+	if got, want := callTimeout(cfg), 135*time.Second; got != want {
+		t.Errorf("callTimeout = %s, want %s (slowest agent + slack)", got, want)
+	}
+
+	cfg.Server.CallTimeout = "45s"
+	if got, want := callTimeout(cfg), 45*time.Second; got != want {
+		t.Errorf("callTimeout = %s, want the explicit %s", got, want)
 	}
 }
 

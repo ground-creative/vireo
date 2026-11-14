@@ -24,10 +24,17 @@ error, not EOF.
 | `message`   | `0x01` | `MessageRequest`     |
 | `data`      | `0x02` | `MessageResponse`    |
 | `end`       | `0x03` | `{ok, session}`      |
+| `partial`   | `0x04` | `{kind, seq, text}`  |
 | `error`     | `0x05` | `{code, message}`    |
 | `negotiate` | `0x10` | `{protocol, client}` |
 | `manifest`  | `0x11` | manifest             |
 | `session`   | `0x12` | `SessionRequest`     |
+
+A `partial` frame is progress inside a turn: text the agent wants shown while it
+is still working. It never ends the turn and never counts as one — `end` still
+follows, and only that increments the turn count. Old clients ignore the type,
+so it is additive. `kind` is `status` for an ephemeral line ("fetching the
+site…"); `seq` orders the frames within one turn.
 
 ## Handshake
 
@@ -225,6 +232,29 @@ The backend answers with any 2xx and JSON:
 
 A bare JSON string is accepted as the reply. A non-2xx status fails the message
 with `upstream_error`, and response bodies are capped at 8 MiB.
+
+### Progress: saying "hold on"
+
+A backend that knows a turn will be slow can stream the answer instead of
+waiting to produce it. If the request carries
+
+```
+Accept: application/x-ndjson
+```
+
+answer with `Content-Type: application/x-ndjson` and newline-delimited JSON:
+
+```
+{"partial": "fetching your site…"}
+{"partial": "building the assistant…"}
+{"reply": "Done — your assistant is live.", "session": {"summary": "created an agent"}}
+```
+
+Every `partial` line is forwarded to the caller immediately as a `partial` frame;
+the last line is the usual `{reply, session}`. The turn still ends with `end`, so
+progress never counts as a turn and never changes the envelope. Anything that
+does not answer with that content type keeps the whole-body behaviour above, and
+a backend may ignore the header entirely — the daemon then simply waits.
 
 ## Discovery
 

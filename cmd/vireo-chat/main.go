@@ -40,7 +40,7 @@ func main() {
 	insecure := flag.Bool("insecure", true, "skip certificate verification (dev only)")
 	idFlag := flag.String("id", "", "client id override (default: generated once and stored in the config dir)")
 	name := flag.String("name", "vireo-chat", "human-readable client name")
-	timeout := flag.Duration("timeout", 15*time.Second, "per-request timeout")
+	timeout := flag.Duration("timeout", 120*time.Second, "per-request timeout; a model-backed agent can take a minute or more")
 	flag.Parse()
 
 	// The host may be given directly ("vireo-chat localhost:7777") or after
@@ -80,6 +80,11 @@ func main() {
 		ClientID: clientID,
 		Name:     *name,
 		Timeout:  *timeout,
+		// Progress lines arrive while the agent is still working; print them as
+		// they come so a slow turn looks alive instead of frozen.
+		OnPartial: func(p protocol.PartialPayload) {
+			fmt.Printf("\n  · %s", p.Text)
+		},
 		Insecure: *insecure,
 		UseQUIC:  *proto == "quic",
 	}
