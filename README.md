@@ -48,7 +48,7 @@ arrives inside that authenticated connection — so the certificate at the SRV
 target has to cover the queried domain, which is the name the client sends as
 `ServerName`.
 
-## Install
+## Try it
 
 Build from source (Go 1.22+):
 
