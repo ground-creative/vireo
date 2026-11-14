@@ -90,6 +90,70 @@ Only agents are numbered. `back` returns to the main menu, which lists your
 recent conversations by their stable ids — type an id to continue one, so it
 keeps working however many conversations appear around it.
 
+### Live demo: answers from a model
+
+`config/demo.yaml` is a stub — no model runs behind it. `config/ziwa-dev.yaml`
+is the real case: two agents whose answers come from a **ZIWA** assistant,
+through [`ziwa-bridge`](https://github.com/ground-creative/vireo-ziwa), a
+webhook backend that owns the model call. vireo is unchanged: same frames, same
+sessions, same one POST per turn.
+
+```
+AI host ──vireo/1──▶ vireo (ziwa-dev) ──POST /vireo/message──▶ ziwa-bridge ──▶ ZIWA
+```
+
+| | |
+| --- | --- |
+| endpoint | `ziwa-dev` / `ziwa-ai-dev`, TLS + QUIC on `:7778` |
+| agents | `sales-representative` (Martin, Solutions Advisor), `agent-creator` |
+| backend | `ziwa-bridge` on the same Docker network, `http://ziwa-bridge:8089/vireo/message` |
+| refs | `site` → `ziwa.ai`, `api-docs` → `api.ziwa.ai/docs/api/v1` |
+| timeout | `300s` per turn — a model turn, or building an agent from a URL, is not instant |
+
+Both agents set `start_message`, so a conversation opens with the agent's own
+words instead of a confirmation, and the backend is told on the first turn that
+the greeting was already said — a model does not repeat it.
+
+The bridge maps each vireo agent name to a different ZIWA assistant, so one
+process serves both. This is the exact turn vireo sends and receives, captured
+from the running deployment:
+
+```console
+$ curl -s -X POST http://ziwa-bridge:8089/vireo/message \
+    -H 'Content-Type: application/json' \
+    -d '{"agent":"sales-representative","session_id":"probe","message":"hello"}'
+{"reply":"Hello! Thank you for contacting ZIWA Solutions. \n\nHow can I help you today? If you are looking to improve your operations, automate workflows, or explore our AI and engineering solutions, feel free to let me know what you need.","session":{"summary":"Hello! Thank you for contacting ZIWA Solutions. How can I help you today? If you are looki…"}}
+```
+
+That `reply` is what a client shows in `vireo-chat`, and what `vireo-mcp`'s
+`send_message` returns. A long turn also streams progress: the bridge forwards
+the model's partial output as `partial` frames while the completion runs, and the
+final `reply` still comes from the completion response.
+
+`config/ziwa-dev.yaml` is a local file, git-ignored like every config except
+`demo.yaml`, because the bridge's assistant ids and keys are not in this repo.
+
+Deployment is two containers on one Docker network — the bridge publishes no
+port, so only vireo can reach it:
+
+```bash
+docker network create vireo-net
+
+docker run -d --name ziwa-bridge --network vireo-net --restart unless-stopped \
+  -v "$PWD/ziwa-bridge.yaml:/app/ziwa-bridge.yaml:ro" \
+  ziwa-bridge
+
+docker run -d --name vireo --network vireo-net --restart unless-stopped \
+  -p 7778:7778/tcp -p 7778:7778/udp \
+  -v "$PWD/config:/app/config:ro" \
+  -v "$PWD/sessions:/app/sessions" \
+  vireo --config ziwa-dev
+```
+
+`transport` in that config is `http://ziwa-bridge:8089/vireo/message`: the
+container name is what resolves on a user-defined network, while `127.0.0.1`
+inside the vireo container is vireo itself.
+
 ## Configuration
 
 ```yaml
