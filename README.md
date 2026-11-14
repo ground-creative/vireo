@@ -158,6 +158,12 @@ Register it with the host — Claude Desktop, Cursor, VS Code:
 }
 ```
 
+If the host cannot start it, use the absolute path —
+`$(go env GOPATH)/bin/vireo-mcp` — instead of the bare name. Desktop hosts often
+launch with a minimal `PATH` and report `spawn vireo-mcp ENOENT`; the
+[vireo-mcp README](https://github.com/ground-creative/vireo-mcp#load-it-into-your-client)
+covers that case in full.
+
 The host then connects to a domain by name; the bridge resolves it, reads the
 manifest and lists the agents.
 

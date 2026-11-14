@@ -5,3 +5,8 @@ config/*
 # Runtime session envelopes are ignored; .gitkeep keeps the folder in the repo.
 sessions/*
 !sessions/.gitkeep
+
+# Binaries built in place with `go build -o ...`.
+/vireo
+/vireo-chat
+/fakeagent
