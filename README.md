@@ -22,6 +22,14 @@ HTTP webhook. No model, no API key, no per-vendor client code.
 
 Connecting an AI assistant to a service today means one of three bad options: scrape the site, write custom API glue for every assistant, or install a separate MCP server for every vendor you want to reach. None of them scale past the first integration, and none of them give you runtime discovery or multi-turn state.
 
+Each option has a price. Scraping pays in tokens: a page of HTML is mostly
+navigation, script and styling, and one answer often needs several pages read.
+Then the site pushes back — bot walls, captchas and fingerprinting exist to stop
+exactly this, so the agent ends up impersonating a human browser to read a page
+the business published publicly. When the layout changes, the integration breaks
+quietly. And the business has no say in any of it: no idea which agent is asking,
+no control over what it sees, no way to answer differently.
+
 vireo replaces that with one DNS lookup per domain: the client discovers the
 endpoint, reads what it offers, and starts talking. The business stays in control —
 it decides which agents exist and what answers them.
@@ -76,8 +84,8 @@ Both protocols must be published: `7777/tcp` for TLS, `7777/udp` for QUIC.
 ## Demo
 
 An assistant asks the business a question in plain language and gets an answer —
-opening hours, prices, availability, whether they cover your area. This is the
-whole flow, from a domain to a reply:
+opening hours, prices, availability, whether they cover your area. Here is the
+whole flow, from a domain to a reply, against an example business:
 
 ```console
 $ vireo-chat connect acme-plumbing.example
@@ -259,6 +267,25 @@ Answer with any 2xx and JSON:
 `session.status: "closed"` ends the conversation after the turn. A bare JSON
 string is accepted as the reply.
 
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Agent     string `json:"agent"`
+		SessionID string `json:"session_id"`
+		Message   string `json:"message"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"reply":   "You said: " + req.Message,
+		"session": map[string]any{"summary": "handled a message"},
+	})
+}
+```
+
+A non-2xx status surfaces as `upstream_error`; bodies are capped at 8 MiB; the
+per-agent `timeout` (default `30s`) bounds the call.
+
 ## Progress inside a turn
 
 A backend can stream while it works: one NDJSON line per update,
@@ -288,25 +315,6 @@ webhook request and decides what to do about it.
 Turns run concurrently, so the read loop stays free while a call is in flight —
 that is what makes a cancel frame readable at all. Details and the frame layout
 are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md#cancelling-a-turn).
-
-```go
-func handler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Agent     string `json:"agent"`
-		SessionID string `json:"session_id"`
-		Message   string `json:"message"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
-
-	json.NewEncoder(w).Encode(map[string]any{
-		"reply":   "You said: " + req.Message,
-		"session": map[string]any{"summary": "handled a message"},
-	})
-}
-```
-
-A non-2xx status surfaces as `upstream_error`; bodies are capped at 8 MiB; the
-per-agent `timeout` (default `30s`) bounds the call.
 
 ## Documentation
 
