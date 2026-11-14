@@ -46,44 +46,28 @@ Both protocols must be published: `7777/tcp` for TLS, `7777/udp` for QUIC.
 
 ## Demo
 
-Point a client at a domain and talk to that business's own assistant. This is the
-live endpoint at [ziwa.ai](https://ziwa.ai), found through `_vireo._tcp.ziwa.ai`:
+Ask a business's own assistant what you need — hours, prices, availability,
+whether they cover your area — instead of scraping a site or integrating one API
+per vendor:
 
 ```console
-$ vireo-chat connect ziwa.ai
-connected to vireo.ziwa.ai:7778 (SRV record)
+$ vireo-chat connect acme-plumbing.example
+connected to agent.acme-plumbing.example:7777 (SRV record)
 
 agents:
-  1) sales-representative  Chat with Martin, our Solutions Advisor, about our IT services, tech stack, or booking a consultation. [conversation]
-  2) agent-creator         Turn your website URL or business scope into a custom AI support and lead-capture agent. [conversation]
+  1) bookings   Book a visit, change or cancel an appointment [conversation]
+  2) support    Questions about service, coverage and pricing [conversation]
 
-references:
-  api-docs   https://api.ziwa.ai/docs/api/v1
-  site       https://ziwa.ai
+vireo> support
+support> do you cover the north side?
 
-vireo> sales-representative
-Hi, I'm Martin! Have questions about our IT services or want to discuss a
-project? Let's chat.
-
-sales-representative> Do you build custom software for logistics companies?
-
-Yes, we do. At ZIWA Solutions, we build custom business and operational
-software, integrations, and connected systems tailored to your workflows.
-
-For logistics, that often involves tracking, fleet or warehouse data flow,
-dispatch and route automation, connecting legacy ERPs, or linking physical
-hardware and IoT sensors with internal portals.
-
-What specific workflow, tracking challenge, or system are you looking to
-improve or build?
-   [open · turn 1] "Yes, we do. At ZIWA Solutions, we build custom business…"
+Yes — everything north of the river, with same-day slots before 11am.
+   [open · turn 1] "coverage north side"
 ```
 
-That is the whole point: the assistant already knows the business. Ask what is on
-the menu, whether they deliver to your postcode, when the next showing is, or
-whether they do the thing you need — and keep asking, because the conversation is
-a session, not a single request. Nothing vendor-specific is installed; the agents
-above are whatever that business publishes today.
+Then keep asking: the conversation is a session, so a follow-up carries the
+thread instead of starting over. Swap the agents for a restaurant, a clinic or a
+booking desk and the shape is the same — the answers come from the business.
 
 ### Run it locally
 
