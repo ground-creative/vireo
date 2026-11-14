@@ -1,16 +1,29 @@
 # vireo
 
-vireo is a Go daemon that gives any domain a TLS 1.3 / QUIC front door, discovered via DNS SRV (`_vireo._tcp.<domain>`), where AI assistants inspect a runtime manifest of exposed agents and converse with them over durable sessions.
+**vireo lets an AI assistant talk to a business directly.** The business runs one
+small daemon at its own domain; any AI host that looks the domain up gets the list
+of agents that business exposes and can hold a real conversation with them. The
+answers still come from the business — vireo routes each turn to its webhook and
+keeps the session. Nothing else.
 
 ```text
 AI host ──MCP──▶ vireo-mcp ──[DNS SRV + vireo/1]──▶ vireo ──HTTP POST──▶ your backend
 ```
 
-## What it does
+## What it is
+
+A single Go binary per domain. It listens on one port with TLS 1.3 and QUIC, is
+found through a standard DNS SRV record (`_vireo._tcp.<domain>`), serves a runtime
+manifest of that domain's agents, and forwards every turn to one HTTP webhook. No
+model, no API key, no per-vendor client code.
+
+## What it solves
 
 Connecting an AI assistant to a service today means one of three bad options: scrape the site, write custom API glue for every assistant, or install a separate MCP server for every vendor you want to reach. None of them scale past the first integration, and none of them give you runtime discovery or multi-turn state.
 
-vireo replaces that with a single daemon per domain, advertised via a standard DNS SRV record (`_vireo._tcp.<domain>`). When a client connects, vireo listens on one port (TLS 1.3 and QUIC), serves a runtime manifest of the domain's available agents, and routes multi-turn conversations inside durable sessions to one HTTP webhook—leaving your backend in full control of execution. One DNS lookup per domain, one bridge per AI host, and zero per-vendor client config.
+vireo replaces that with one DNS lookup per domain: the client discovers the
+endpoint, reads what it offers, and starts talking. The business stays in control —
+it decides which agents exist and what answers them.
 
 ## Install
 
@@ -46,9 +59,9 @@ Both protocols must be published: `7777/tcp` for TLS, `7777/udp` for QUIC.
 
 ## Demo
 
-Ask a business's own assistant what you need — hours, prices, availability,
-whether they cover your area — instead of scraping a site or integrating one API
-per vendor:
+An assistant asks the business a question in plain language and gets an answer —
+opening hours, prices, availability, whether they cover your area. This is the
+whole flow, from a domain to a reply:
 
 ```console
 $ vireo-chat connect acme-plumbing.example
