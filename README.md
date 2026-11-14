@@ -6,6 +6,8 @@ of agents that business exposes and can hold a real conversation with them. The
 answers still come from the business — vireo routes each turn to its webhook and
 keeps the session. Nothing else.
 
+It was built by asking an AI to design the protocol it would use itself.
+
 ```text
 AI host ──MCP──▶ vireo-mcp ──[DNS SRV + vireo/1]──▶ vireo ──HTTP POST──▶ your backend
 ```
@@ -34,11 +36,6 @@ vireo is what an assistant chooses instead of scraping. One DNS lookup per
 domain: the client discovers the endpoint, reads what it offers, and starts
 talking. The business stays in control — it decides which agents exist and what
 answers them.
-
-It came about the short way: vireo was built by asking an AI to design the
-communication layer it would use itself. The shape follows from that — a business
-publishes agents, an assistant holds a conversation with them, and the web page
-is never in the loop.
 
 ### Why SRV, not a well-known URL
 
