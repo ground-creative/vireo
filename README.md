@@ -73,12 +73,11 @@ Then keep asking: the conversation is a session, so a follow-up carries the
 thread instead of starting over. Swap the agents for a restaurant, a clinic or a
 booking desk and the shape is the same — the answers come from the business.
 
-The business above is fictional — [ziwa.ai](https://ziwa.ai) is the real one.
-
 ## Live demo
 
-Nothing to install on the business side; it is already running. With a client
-built in the next section, one command:
+[ziwa.ai](https://ziwa.ai) is a real endpoint, already running — nothing to
+install on the business side. With a client built in the next section, one
+command:
 
 ```bash
 ./vireo-chat connect ziwa.ai
