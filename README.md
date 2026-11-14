@@ -73,31 +73,38 @@ Then keep asking: the conversation is a session, so a follow-up carries the
 thread instead of starting over. Swap the agents for a restaurant, a clinic or a
 booking desk and the shape is the same — the answers come from the business.
 
+The endpoint above is an example. The live one is [ziwa.ai](https://ziwa.ai):
+`connect ziwa.ai` from either client below, and it lists whoever that business
+publishes today.
+
 ## Try it yourself
 
-Build from source (Go 1.22+):
+The demo above needs a client and nothing else — the endpoint is already running.
+There are two:
+
+- **`vireo-chat`** — a terminal client, for talking to a daemon by hand.
+- **`vireo-mcp`** — the MCP bridge, so an AI host does the talking
+  ([Connecting an AI](#connecting-an-ai-vireo-mcp)).
 
 ```bash
 git clone https://github.com/ground-creative/vireo.git
 cd vireo
-go build -o vireo .
+go build -o vireo-chat ./cmd/vireo-chat
+./vireo-chat connect ziwa.ai
 ```
 
-That is the whole thing. `vireo` is the daemon; nothing else is required to run
-it, and no AI, model or API key is involved.
+That is the whole thing for a client: no config, no key, no model on your side.
+`connect ziwa.ai` resolves through `_vireo._tcp.ziwa.ai`, lists what the business
+publishes, and opens a session.
 
-Tagged releases with prebuilt binaries for Linux and macOS (amd64, arm64) are
-intended so you can skip the Go toolchain — nothing is published yet, so build
-from source for now.
-
-Optional binaries:
+To publish your own agents you run the daemon:
 
 ```bash
-go build -o vireo-chat ./cmd/vireo-chat    # chat client, for talking to a daemon by hand
-go build -o fakeagent  ./cmd/fakeagent     # stub backend, used only by the local run below
+go build -o vireo .
+./vireo --config demo          # reads config/demo.yaml
 ```
 
-Docker:
+Docker works the same way:
 
 ```bash
 docker build -t vireo .
@@ -108,52 +115,12 @@ docker run --rm -p 7777:7777/tcp -p 7777:7777/udp \
 ```
 
 Both protocols must be published: `7777/tcp` for TLS, `7777/udp` for QUIC.
+`./cmd/fakeagent` is a stub webhook for testing your own backend; it is not part
+of a deployment.
 
-### Run it locally
-
-A stub backend, for seeing the wire path without writing one. `fakeagent` is not
-part of a deployment — a real install points `transport` at your own service and
-never needs it.
-
-```bash
-./fakeagent            # 1. stub backend on :8088
-./vireo --config demo  # 2. daemon, TLS + QUIC on :7777
-./vireo-chat           # 3. client
-```
-
-`--config` is required; the daemon only reads YAML from `config/`. The client
-generates its identity once and reuses it, so conversations survive between runs.
-
-```
-$ ./vireo-chat
-client id: vireo_4f1c8a2e9b7d4c0fa1e2d3b4c5a6f7e8 (/home/you/.config/vireo/client-id)
-> connect localhost:7777
-connected to localhost:7777 (explicit address)
-
-agents:
-  1) orders         Take food orders: pizzas, sides, drinks, pickup or delivery [conversation]
-  2) reservations   Check availability, book a table and cancel a booking [conversation]
-  3) concierge      Answer anything else: hours, directions, general questions [conversation]
-
-type a number or an agent name — help for commands
-vireo> 1
-orders — Take food orders: pizzas, sides, drinks, pickup or delivery
-
-no conversations yet — type: new
-orders> new
-
-conversation 4f1c8a2e started — type a message
-orders[4f1c8a2e]> hi, I want to order a pizza
-
-This is not an AI. No model runs behind this endpoint — the daemon, the session
-and the transport are real, the answers are not. Configure your own agents and
-their webhooks in config/.
-   [open · turn 1] "demo reply"
-```
-
-Only agents are numbered. `back` returns to the main menu, which lists your
-recent conversations by their stable ids — type an id to continue one, so it
-keeps working however many conversations appear around it.
+Tagged releases with prebuilt binaries for Linux and macOS (amd64, arm64) are
+intended so you can skip the Go toolchain — nothing is published yet, so build
+from source.
 
 ## Configuration
 
@@ -235,9 +202,6 @@ manifest and lists the agents.
 Why the two installs differ: `vireo-mcp` is a single binary with no data files,
 so `go install` covers it. The daemon above is built in its own checkout because
 it reads `config/` and `certs/` and writes `sessions/` beside the binary.
-
-**Live demo:** [ziwa.ai](https://ziwa.ai). Ask the host to `connect ziwa.ai` —
-it resolves through `_vireo._tcp.ziwa.ai` and lists the agents behind it.
 
 ## Backend Webhook
 
