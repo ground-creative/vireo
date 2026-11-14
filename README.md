@@ -46,9 +46,50 @@ Both protocols must be published: `7777/tcp` for TLS, `7777/udp` for QUIC.
 
 ## Demo
 
-Optional. It runs a stub backend so you can see the wire path end to end without
-writing one. `fakeagent` is not part of a deployment — a real install points
-`transport` at your own service and never needs it.
+Point a client at a domain and talk to that business's own assistant. This is the
+live endpoint at [ziwa.ai](https://ziwa.ai), found through `_vireo._tcp.ziwa.ai`:
+
+```console
+$ vireo-chat connect ziwa.ai
+connected to vireo.ziwa.ai:7778 (SRV record)
+
+agents:
+  1) sales-representative  Chat with Martin, our Solutions Advisor, about our IT services, tech stack, or booking a consultation. [conversation]
+  2) agent-creator         Turn your website URL or business scope into a custom AI support and lead-capture agent. [conversation]
+
+references:
+  api-docs   https://api.ziwa.ai/docs/api/v1
+  site       https://ziwa.ai
+
+vireo> sales-representative
+Hi, I'm Martin! Have questions about our IT services or want to discuss a
+project? Let's chat.
+
+sales-representative> Do you build custom software for logistics companies?
+
+Yes, we do. At ZIWA Solutions, we build custom business and operational
+software, integrations, and connected systems tailored to your workflows.
+
+For logistics, that often involves tracking, fleet or warehouse data flow,
+dispatch and route automation, connecting legacy ERPs, or linking physical
+hardware and IoT sensors with internal portals.
+
+What specific workflow, tracking challenge, or system are you looking to
+improve or build?
+   [open · turn 1] "Yes, we do. At ZIWA Solutions, we build custom business…"
+```
+
+That is the whole point: the assistant already knows the business. Ask what is on
+the menu, whether they deliver to your postcode, when the next showing is, or
+whether they do the thing you need — and keep asking, because the conversation is
+a session, not a single request. Nothing vendor-specific is installed; the agents
+above are whatever that business publishes today.
+
+### Run it locally
+
+A stub backend, for seeing the wire path without writing one. `fakeagent` is not
+part of a deployment — a real install points `transport` at your own service and
+never needs it.
 
 ```bash
 ./fakeagent            # 1. stub backend on :8088
@@ -89,37 +130,6 @@ their webhooks in config/.
 Only agents are numbered. `back` returns to the main menu, which lists your
 recent conversations by their stable ids — type an id to continue one, so it
 keeps working however many conversations appear around it.
-
-### A real endpoint
-
-The same client against a live deployment — [ziwa.ai](https://ziwa.ai),
-resolved through `_vireo._tcp.ziwa.ai`:
-
-```console
-$ vireo-chat connect ziwa.ai
-client id: vireo_24a1… (/home/you/.config/vireo/client-id)
-connected to ziwa.ai (SRV record)
-
-agents:
-  1) sales-representative  Chat with Martin, our Solutions Advisor, about our IT services, tech stack, or booking a consultation. [conversation]
-  2) agent-creator         Turn your website URL or business scope into a custom AI support and lead-capture agent. [conversation]
-
-recent conversations:
-  wqvsCYhj  sales-representative  open  Nov 14 13:21  "pricing for a custom agent"
-  LoX-r8Hz  agent-creator         open  Nov 14 13:20  "agent from ziwa.ai"
-
-references:
-  api-docs   https://api.ziwa.ai/docs/api/v1
-  site       https://ziwa.ai
-
-type an agent number or name, or a conversation id to resume — help
-vireo> 
-```
-
-Everything above the prompt is the endpoint's manifest, not this repository: the
-agents, their descriptions, the `refs` URLs and the session list all arrive from
-the daemon at connect time, so a business adds or retires an agent and the client
-shows the new list on the next connect. Only the client id persists locally.
 
 ## Configuration
 
