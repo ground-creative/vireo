@@ -13,9 +13,10 @@ AI host ──MCP──▶ vireo-mcp ──[DNS SRV + vireo/1]──▶ vireo �
 ## What it is
 
 A single Go binary per domain. It listens on one port with TLS 1.3 and QUIC, is
-found through a standard DNS SRV record (`_vireo._tcp.<domain>`), serves a runtime
-manifest of that domain's agents, and forwards every turn to one HTTP webhook. No
-model, no API key, no per-vendor client code.
+found through a standard DNS SRV record (`_vireo._tcp.<domain>`), and serves a
+runtime manifest: the agents that domain exposes, plus the references it publishes
+alongside them — a site, docs, a wiki, a status page. Every turn then goes to one
+HTTP webhook. No model, no API key, no per-vendor client code.
 
 ## What it solves
 
