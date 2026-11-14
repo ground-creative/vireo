@@ -35,6 +35,11 @@ domain: the client discovers the endpoint, reads what it offers, and starts
 talking. The business stays in control — it decides which agents exist and what
 answers them.
 
+It came about the short way: vireo was built by asking an AI to design the
+communication layer it would use itself. The shape follows from that — a business
+publishes agents, an assistant holds a conversation with them, and the web page
+is never in the loop.
+
 ### Why SRV, not a well-known URL
 
 A2A publishes its Agent Card at `https://{domain}/.well-known/agent-card.json`,
