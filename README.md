@@ -171,8 +171,8 @@ Why the two installs differ: `vireo-mcp` is a single binary with no data files,
 so `go install` covers it. The daemon above is built in its own checkout because
 it reads `config/` and `certs/` and writes `sessions/` beside the binary.
 
-**Live demo:** not deployed yet. When it is, it will be reachable as
-`connect demo.vireo.dev`, discovered through `_vireo._tcp.demo.vireo.dev`.
+**Live demo:** [ziwa.ai](https://ziwa.ai). Ask the host to `connect ziwa.ai` —
+it resolves through `_vireo._tcp.ziwa.ai` and lists the agents behind it.
 
 ## Backend Webhook
 
