@@ -26,6 +26,17 @@ vireo replaces that with one DNS lookup per domain: the client discovers the
 endpoint, reads what it offers, and starts talking. The business stays in control —
 it decides which agents exist and what answers them.
 
+### Why SRV, not a well-known URL
+
+A2A publishes its Agent Card at `https://{domain}/.well-known/agent-card.json`,
+which pins the endpoint to the web origin's host and port. An SRV record names
+infrastructure independently of the website: another host, another port, another
+protocol. SIP (RFC 3263), XMPP, LDAP and Matrix all use SRV for exactly this
+reason. The layers differ: DNS only routes, TLS authenticates, and the manifest
+arrives inside that authenticated connection — so the certificate at the SRV
+target has to cover the queried domain, which is the name the client sends as
+`ServerName`.
+
 ## Install
 
 Build from source (Go 1.22+):
@@ -38,6 +49,10 @@ go build -o vireo .
 
 That is the whole thing. `vireo` is the daemon; nothing else is required to run
 it, and no AI, model or API key is involved.
+
+Tagged releases with prebuilt binaries for Linux and macOS (amd64, arm64) are
+intended so you can skip the Go toolchain — nothing is published yet, so build
+from source for now.
 
 Optional binaries:
 
@@ -243,6 +258,20 @@ Answer with any 2xx and JSON:
 `session.summary` replaces the envelope's summary when non-empty, and
 `session.status: "closed"` ends the conversation after the turn. A bare JSON
 string is accepted as the reply.
+
+## Progress inside a turn
+
+A backend can stream while it works: one NDJSON line per update,
+`{"partial":"fetching the site…"}`, forwarded at once as a `partial` frame (type
+`0x04`) whose payload is `{"kind":"status","seq":N,"text":"…"}`. The client shows
+it as an ephemeral line.
+
+A partial never ends the turn and never counts as one — only `end` does. Clients
+that do not know the type skip it, so this is additive, and a backend that streams
+nothing behaves exactly as before.
+
+Frames: [`docs/PROTOCOL.md#frames`](docs/PROTOCOL.md#frames) · progress details:
+[`docs/PROTOCOL.md#progress-saying-hold-on`](docs/PROTOCOL.md#progress-saying-hold-on).
 
 ## Cancelling a turn
 
