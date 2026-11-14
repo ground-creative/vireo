@@ -90,6 +90,37 @@ Only agents are numbered. `back` returns to the main menu, which lists your
 recent conversations by their stable ids — type an id to continue one, so it
 keeps working however many conversations appear around it.
 
+### A real endpoint
+
+The same client against a live deployment — [ziwa.ai](https://ziwa.ai),
+resolved through `_vireo._tcp.ziwa.ai`:
+
+```console
+$ vireo-chat connect ziwa.ai
+client id: vireo_24a1… (/home/you/.config/vireo/client-id)
+connected to ziwa.ai (SRV record)
+
+agents:
+  1) sales-representative  Chat with Martin, our Solutions Advisor, about our IT services, tech stack, or booking a consultation. [conversation]
+  2) agent-creator         Turn your website URL or business scope into a custom AI support and lead-capture agent. [conversation]
+
+recent conversations:
+  wqvsCYhj  sales-representative  open  Nov 14 13:21  "pricing for a custom agent"
+  LoX-r8Hz  agent-creator         open  Nov 14 13:20  "agent from ziwa.ai"
+
+references:
+  api-docs   https://api.ziwa.ai/docs/api/v1
+  site       https://ziwa.ai
+
+type an agent number or name, or a conversation id to resume — help
+vireo> 
+```
+
+Everything above the prompt is the endpoint's manifest, not this repository: the
+agents, their descriptions, the `refs` URLs and the session list all arrive from
+the daemon at connect time, so a business adds or retires an agent and the client
+shows the new list on the next connect. Only the client id persists locally.
+
 ## Configuration
 
 ```yaml
