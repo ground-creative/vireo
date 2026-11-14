@@ -315,8 +315,18 @@ func (c *connState) forward(stream uint32, client upstream.Client, req protocol.
 
 	c.srv.log.Printf("[%s] message stream=%d agent=%q session=%q: %s",
 		c.remote, stream, client.Name(), sessionID, compact(req.Message))
+	// On the very first turn of a conversation the backend is told what the
+	// agent already said, so it does not repeat the greeting.
+	greeting := ""
+	if info != nil && info.Turns == 0 {
+		greeting = client.StartMessage()
+	}
 	started := time.Now()
-	resp, err := client.Send(ctx, upstream.Call{Message: req.Message, SessionID: sessionID})
+	resp, err := client.Send(ctx, upstream.Call{
+		Message:                 req.Message,
+		SessionID:               sessionID,
+		InitialAssistantMessage: greeting,
+	})
 	if err != nil {
 		c.srv.log.Printf("[%s] message stream=%d agent=%q failed in %s: %v",
 			c.remote, stream, client.Name(), time.Since(started).Round(time.Millisecond), err)
@@ -416,7 +426,12 @@ func (c *connState) sessionNew(stream uint32, req protocol.SessionRequest) {
 		Status:  protocol.StatusOpen,
 	})
 	c.srv.log.Printf("[%s] session new %s for agent=%q by client=%q", c.remote, info.ID, client.Name(), c.clientID)
-	c.respondEnd(stream, info, &info)
+	// The greeting comes from the configuration, so it is delivered without a
+	// backend call. The backend learns about it on the first turn.
+	c.respondEnd(stream, protocol.NewSessionResponse{
+		Session:      info,
+		StartMessage: client.StartMessage(),
+	}, &info)
 }
 
 func (c *connState) sessionList(stream uint32, req protocol.SessionRequest) {

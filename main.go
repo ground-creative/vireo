@@ -79,13 +79,14 @@ type agentSessionConf struct {
 }
 
 type agentConf struct {
-	Name        string            `yaml:"name"`
-	Description string            `yaml:"description"`
-	Sessions    *bool             `yaml:"sessions"`
-	Transport   string            `yaml:"transport"`
-	Timeout     string            `yaml:"timeout"`
-	Session     *agentSessionConf `yaml:"session"`
-	Refs        map[string]string `yaml:"refs"`
+	Name         string            `yaml:"name"`
+	Description  string            `yaml:"description"`
+	StartMessage string            `yaml:"start_message"`
+	Sessions     *bool             `yaml:"sessions"`
+	Transport    string            `yaml:"transport"`
+	Timeout      string            `yaml:"timeout"`
+	Session      *agentSessionConf `yaml:"session"`
+	Refs         map[string]string `yaml:"refs"`
 }
 
 func main() {
@@ -430,13 +431,14 @@ func buildRegistry(cfg *config) (*upstream.Registry, protocol.Manifest, []string
 		}
 
 		client, err := upstream.New(upstream.Spec{
-			Name:        name,
-			Description: a.Description,
-			Transport:   transport,
-			Sessions:    sessions,
-			Mint:        mint,
-			TTL:         ttl,
-			Timeout:     timeout,
+			Name:         name,
+			Description:  a.Description,
+			StartMessage: strings.TrimSpace(a.StartMessage),
+			Transport:    transport,
+			Sessions:     sessions,
+			Mint:         mint,
+			TTL:          ttl,
+			Timeout:      timeout,
 		})
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("agents[%d] %q: %v", i, name, err))
@@ -447,10 +449,11 @@ func buildRegistry(cfg *config) (*upstream.Registry, protocol.Manifest, []string
 			continue
 		}
 		agents = append(agents, protocol.AgentEntry{
-			Name:        client.Name(),
-			Description: client.Description(),
-			Sessions:    sessions,
-			Refs:        a.Refs,
+			Name:         client.Name(),
+			Description:  client.Description(),
+			Sessions:     sessions,
+			StartMessage: client.StartMessage(),
+			Refs:         a.Refs,
 		})
 		log.Printf("agent ready: %s (via %s, sessions=%t, mint=%s)",
 			client.Name(), scheme(transport), sessions, mint.Rule())

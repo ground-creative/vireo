@@ -172,7 +172,7 @@ anything but conversation. The payload is `SessionRequest`:
 
 | Op              | Fields                       | Answer                                |
 | --------------- | ---------------------------- | ------------------------------------- |
-| `session.new`   | `agent`, `summary?`          | the new envelope                      |
+| `session.new`   | `agent`, `summary?`          | `{session, start_message?}`           |
 | `session.list`  | `agent`, `limit?`, `cursor?` | `{sessions, next_cursor}`             |
 | `session.get`   | `agent`, `id`                | the envelope                          |
 | `session.close` | `agent`, `id`, `reason?`     | the closed envelope                   |
@@ -198,6 +198,22 @@ X-Vireo-Session: y113YjxvfPQzaE6ZWhmabl-wnxthBAFJ
 }
 ```
 
+When the agent declares a `start_message`, the daemon returns it to the client
+at session creation — no backend call is made for it — and sends it to the
+backend on the first turn as `initial_assistant_message`:
+
+```json
+{
+  "agent": "orders",
+  "session_id": "y113YjxvfPQzaE6ZWhmabl-wnxthBAFJ",
+  "message": "I'd like 2 margherita pizzas for pickup",
+  "initial_assistant_message": "Welcome to the orders desk."
+}
+```
+
+A model-backed backend uses it as the assistant turn the client already saw,
+so the greeting is not repeated. Later turns omit the field.
+
 The backend answers with any 2xx and JSON:
 
 ```json
@@ -212,11 +228,15 @@ with `upstream_error`, and response bodies are capped at 8 MiB.
 
 ## Discovery
 
-Clients resolve `_vireo._tcp.<domain>` before falling back to port 7777:
+Clients resolve `_vireo._tcp.<domain>`:
 
 ```
 _vireo._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
 ```
+
+There is no default port and no fallback. A hostname with no SRV record is
+refused; address the daemon as `host:port` instead. Guessing a port would make
+a typo in a hostname look like a daemon that is down.
 
 ## Error codes
 

@@ -43,9 +43,21 @@ func main() {
 	timeout := flag.Duration("timeout", 15*time.Second, "per-request timeout")
 	flag.Parse()
 
+	// The host may be given directly ("vireo-chat localhost:7777") or after
+	// the word "connect" ("vireo-chat connect localhost"), matching the
+	// command of the same name inside the shell.
 	host := ""
 	if args := flag.Args(); len(args) > 0 {
 		host = strings.TrimSpace(args[0])
+		if host == "connect" || host == "c" {
+			host = ""
+			if len(args) > 1 {
+				host = strings.TrimSpace(args[1])
+			} else {
+				fmt.Println("usage: vireo-chat connect <host>")
+				return
+			}
+		}
 	}
 
 	clientID := strings.TrimSpace(*idFlag)
@@ -421,13 +433,16 @@ func resumeByID(c *conn, token string) bool {
 // --- sessions --------------------------------------------------------------
 
 func newSession(c *conn, agent string) {
-	info, err := c.NewSession(context.Background(), agent, "")
+	started, err := c.NewSession(context.Background(), agent, "")
 	if err != nil {
 		fmt.Printf("new conversation: %v\n", err)
 		return
 	}
-	c.sessions[agent] = info.ID
-	fmt.Printf("\nconversation %s started — type a message\n", shortID(info.ID))
+	c.sessions[agent] = started.Session.ID
+	fmt.Printf("\nconversation %s started — type a message\n", shortID(started.Session.ID))
+	if started.StartMessage != "" {
+		fmt.Printf("\n%s\n", started.StartMessage)
+	}
 }
 
 // resumeSession continues a conversation named by id. With no id it lists the

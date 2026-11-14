@@ -93,4 +93,38 @@ func TestBuildRegistryAcceptsValidConfig(t *testing.T) {
 	}
 }
 
+// The greeting is configuration: it reaches the manifest and the agent
+// client, trimmed of surrounding space.
+func TestBuildRegistryCarriesTheStartMessage(t *testing.T) {
+	cfg := &config{
+		Transport: "http://127.0.0.1:8088/vireo/message",
+		Agents: []agentConf{
+			{Name: "concierge", StartMessage: "  Hello there  "},
+			{Name: "orders"},
+		},
+	}
+
+	registry, manifest, warnings := buildRegistry(cfg)
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %v, want none", warnings)
+	}
+	if len(manifest.Agents) != 2 {
+		t.Fatalf("manifest lists %d agents, want 2", len(manifest.Agents))
+	}
+	if manifest.Agents[0].StartMessage != "Hello there" {
+		t.Errorf("manifest start_message = %q, want %q", manifest.Agents[0].StartMessage, "Hello there")
+	}
+	if manifest.Agents[1].StartMessage != "" {
+		t.Errorf("manifest start_message = %q, want it empty", manifest.Agents[1].StartMessage)
+	}
+
+	client, ok := registry.LookupAgent("concierge")
+	if !ok {
+		t.Fatal("concierge is not in the registry")
+	}
+	if got := client.StartMessage(); got != "Hello there" {
+		t.Errorf("client start message = %q, want %q", got, "Hello there")
+	}
+}
+
 func boolPtr(b bool) *bool { return &b }

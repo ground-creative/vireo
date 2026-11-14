@@ -107,6 +107,10 @@ agents:
   - name: "orders"
     description: "Take food orders: pizzas, sides, drinks, pickup or delivery"
     sessions: true
+  - name: "concierge"
+    description: "Answer anything else: hours, directions, general questions"
+    start_message: "Hello! How can I help you?"
+    sessions: true
 ```
 
 ```bash
@@ -117,6 +121,10 @@ agents:
 Configs live in `config/`; anything outside it is refused. TLS 1.3 is required —
 there is no plaintext mode. Every key, default and inheritance rule is in
 [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+
+An agent with a `start_message` opens every conversation with that greeting:
+the client shows it as soon as the session exists, and the backend is told on
+the first turn that it was already said, so a model does not repeat it.
 
 ### DNS discovery
 
@@ -137,9 +145,8 @@ maintained in its own repository:
 
 ```bash
 go install github.com/ground-creative/vireo-mcp@latest
+export PATH="$PATH:$(go env GOPATH)/bin"
 ```
-
-<!-- TODO: replace the command with the released binary name/path once vireo-mcp ships -->
 
 Register it with the host — Claude Desktop, Cursor, VS Code:
 
@@ -154,7 +161,9 @@ Register it with the host — Claude Desktop, Cursor, VS Code:
 The host then connects to a domain by name; the bridge resolves it, reads the
 manifest and lists the agents.
 
-<!-- TODO: no public daemon yet. Replace with the real demo hostname once deployed. -->
+Why the two installs differ: `vireo-mcp` is a single binary with no data files,
+so `go install` covers it. The daemon above is built in its own checkout because
+it reads `config/` and `certs/` and writes `sessions/` beside the binary.
 
 **Live demo:** not deployed yet. When it is, it will be reachable as
 `connect demo.vireo.dev`, discovered through `_vireo._tcp.demo.vireo.dev`.

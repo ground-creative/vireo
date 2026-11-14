@@ -50,5 +50,6 @@ agents:
 
   - name: "concierge"
     description: "Answer anything else: hours, directions, general questions"
+    start_message: "Hello! Ask me anything about the restaurant."
     sessions: true
     timeout: "15s"                      # this agent's own webhook timeout

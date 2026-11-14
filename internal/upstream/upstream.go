@@ -28,12 +28,20 @@ const maxResponseBytes = 8 << 20
 type Call struct {
 	Message   string
 	SessionID string
+	// InitialAssistantMessage is the agent's own greeting, sent on the first
+	// turn of a conversation so the backend knows what was already said. It
+	// is empty on every later turn.
+	InitialAssistantMessage string
 }
 
 // Client is one agent behind the endpoint.
 type Client interface {
 	Name() string
 	Description() string
+	// StartMessage is the greeting the agent offers when a conversation
+	// starts. It is delivered to the caller directly; the backend never
+	// produces it.
+	StartMessage() string
 	// SessionsEnabled reports whether the agent holds multi-turn
 	// conversations. A stateless agent answers single messages and records
 	// nothing.
@@ -47,13 +55,14 @@ type Client interface {
 
 // Spec is the configuration shape for one agent.
 type Spec struct {
-	Name        string
-	Description string
-	Transport   string
-	Sessions    bool
-	Mint        *session.Mint
-	TTL         time.Duration
-	Timeout     time.Duration
+	Name         string
+	Description  string
+	StartMessage string
+	Transport    string
+	Sessions     bool
+	Mint         *session.Mint
+	TTL          time.Duration
+	Timeout      time.Duration
 }
 
 // New builds an agent client from a spec, rejecting unsupported or
@@ -86,13 +95,14 @@ func New(spec Spec) (Client, error) {
 	switch u.Scheme {
 	case "http", "https":
 		return &webhook{
-			name:        spec.Name,
-			description: spec.Description,
-			sessions:    spec.Sessions,
-			mint:        mint,
-			ttl:         ttl,
-			endpoint:    u.String(),
-			http:        &http.Client{Timeout: timeout},
+			name:         spec.Name,
+			startMessage: spec.StartMessage,
+			description:  spec.Description,
+			sessions:     spec.Sessions,
+			mint:         mint,
+			ttl:          ttl,
+			endpoint:     u.String(),
+			http:         &http.Client{Timeout: timeout},
 		}, nil
 	case "unix", "grpc":
 		return nil, fmt.Errorf("upstream %s: transport %q is not implemented yet, use http(s)://host/path", spec.Name, u.Scheme)
@@ -102,27 +112,30 @@ func New(spec Spec) (Client, error) {
 }
 
 type webhook struct {
-	name        string
-	description string
-	sessions    bool
-	mint        *session.Mint
-	ttl         time.Duration
-	endpoint    string
-	http        *http.Client
+	name         string
+	description  string
+	startMessage string
+	sessions     bool
+	mint         *session.Mint
+	ttl          time.Duration
+	endpoint     string
+	http         *http.Client
 }
 
 func (w *webhook) Name() string          { return w.name }
 func (w *webhook) Description() string   { return w.description }
+func (w *webhook) StartMessage() string  { return w.startMessage }
 func (w *webhook) SessionsEnabled() bool { return w.sessions }
 func (w *webhook) Mint() *session.Mint   { return w.mint }
 func (w *webhook) TTL() time.Duration    { return w.ttl }
 
 func (w *webhook) Send(ctx context.Context, call Call) (protocol.MessageResponse, error) {
 	body, err := json.Marshal(struct {
-		Agent     string `json:"agent"`
-		SessionID string `json:"session_id,omitempty"`
-		Message   string `json:"message"`
-	}{w.name, call.SessionID, call.Message})
+		Agent                   string `json:"agent"`
+		SessionID               string `json:"session_id,omitempty"`
+		Message                 string `json:"message"`
+		InitialAssistantMessage string `json:"initial_assistant_message,omitempty"`
+	}{w.name, call.SessionID, call.Message, call.InitialAssistantMessage})
 	if err != nil {
 		return protocol.MessageResponse{}, fmt.Errorf("upstream %s: encode request: %w", w.name, err)
 	}

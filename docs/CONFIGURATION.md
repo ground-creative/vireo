@@ -122,12 +122,36 @@ Mint rules are validated at startup, so a contradictory `prefix` / `charset` /
 | `sessions`    | bool     | `true`          | whether the agent holds multi-turn conversations                |
 | `transport`   | string   | top-level       | this agent's webhook                                            |
 | `timeout`     | duration | `30s`           | per-message backend timeout                                     |
+| `start_message` | string | —               | greeting returned at session creation                           |
 | `refs`        | map      | —               | static URLs for this agent                                      |
 | `session`     | block    | inherits global | per-agent `ttl` and mint overrides                              |
 
 A conversational agent (`sessions: true`) requires a session id on every
 message; a stateless agent (`sessions: false`) answers single messages and
 records nothing.
+
+### `start_message`
+
+A greeting the agent says when a conversation starts. It is part of the
+configuration, so it is delivered to the client the moment the conversation is
+created — no backend call is made for it:
+
+```yaml
+agents:
+  - name: "concierge"
+    description: "Ask the restaurant's AI anything"
+    start_message: "Hello! How can I help you with your reservation?"
+    sessions: true
+```
+
+The client shows it right away, so a conversation starts with the agent's
+words rather than with silence. On the first turn the daemon also tells the
+backend what was said, in the `initial_assistant_message` field of the webhook
+payload — so a model-backed agent knows the greeting is already in the history
+and does not repeat it. Later turns do not carry the field.
+
+Without a `start_message` nothing changes: the conversation starts empty and
+the backend answers the first message as usual.
 
 ### Per-agent session overrides
 
