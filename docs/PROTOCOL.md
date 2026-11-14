@@ -19,22 +19,28 @@ All integers are big-endian. A reader consumes exactly one frame per call
 regardless of how the transport splits bytes; a payload cut short mid-frame is an
 error, not EOF.
 
-| Type        | Code   | Payload              |
-| ----------- | ------ | -------------------- |
-| `message`   | `0x01` | `MessageRequest`     |
-| `data`      | `0x02` | `MessageResponse`    |
-| `end`       | `0x03` | `{ok, session}`      |
-| `partial`   | `0x04` | `{kind, seq, text}`  |
-| `error`     | `0x05` | `{code, message}`    |
-| `negotiate` | `0x10` | `{protocol, client}` |
-| `manifest`  | `0x11` | manifest             |
-| `session`   | `0x12` | `SessionRequest`     |
+| Type        | Code   | Payload                    |
+| ----------- | ------ | -------------------------- |
+| `message`   | `0x01` | `MessageRequest`           |
+| `data`      | `0x02` | `MessageResponse`          |
+| `end`       | `0x03` | `{ok, cancelled, session}` |
+| `partial`   | `0x04` | `{kind, seq, text}`        |
+| `error`     | `0x05` | `{code, message}`          |
+| `negotiate` | `0x10` | `{protocol, client}`       |
+| `manifest`  | `0x11` | manifest                   |
+| `session`   | `0x12` | `SessionRequest`           |
+| `cancel`    | `0x13` | empty                      |
 
 A `partial` frame is progress inside a turn: text the agent wants shown while it
 is still working. It never ends the turn and never counts as one — `end` still
 follows, and only that increments the turn count. Old clients ignore the type,
 so it is additive. `kind` is `status` for an ephemeral line ("fetching the
 site…"); `seq` orders the frames within one turn.
+
+A `cancel` frame abandons the turn on the stream it names. It is additive in the
+same way: a daemon that does not know the type rejects it as `invalid_frame`, and
+a caller that never sends one is unaffected. See
+[Cancelling a turn](#cancelling-a-turn).
 
 ## Handshake
 
@@ -233,6 +239,12 @@ The backend answers with any 2xx and JSON:
 A bare JSON string is accepted as the reply. A non-2xx status fails the message
 with `upstream_error`, and response bodies are capped at 8 MiB.
 
+If the caller cancels the turn, the daemon cancels the request context. The
+backend observes it as `r.Context().Done()` — on the standard library's
+`*http.Request`, that is the signal. A backend that wants to act on it (abandon a
+model call, stop a build) does so there; one that ignores it simply finishes and
+its answer is discarded.
+
 ### Progress: saying "hold on"
 
 A backend that knows a turn will be slow can stream the answer instead of
@@ -255,6 +267,44 @@ the last line is the usual `{reply, session}`. The turn still ends with `end`, s
 progress never counts as a turn and never changes the envelope. Anything that
 does not answer with that content type keeps the whole-body behaviour above, and
 a backend may ignore the header entirely — the daemon then simply waits.
+
+## Cancelling a turn
+
+A caller that no longer wants an answer sends a `cancel` frame naming the turn
+to abandon:
+
+```
+stream_id = 3   type = 0x13   payload = (empty)
+```
+
+`stream_id` addresses the turn: it is the stream the `message` frame was sent
+on. No other field is needed, so a cancel cannot be aimed at the wrong
+conversation.
+
+What the daemon does:
+
+1. cancels the context of the upstream webhook call for that stream, which
+   closes the backend request;
+2. stops waiting for the answer;
+3. answers that stream with an `end` frame and **no** `data` frame.
+
+```json
+{ "ok": false, "cancelled": true }
+```
+
+A cancelled turn is not a turn: the session envelope is not touched, so `turns`
+and the summary stay exactly as they were. Cancelling a stream that is not in
+flight is harmless — a late cancel is ignored rather than reported as an error.
+
+Cancellation is **cooperative and best effort, never a rollback**. The daemon
+can stop waiting and can abort the backend request, but it cannot undo work the
+backend already committed: an assistant that was already provisioned stays
+provisioned. A backend sees the cancellation as its HTTP request context being
+done — see [Webhook](#webhook). What it does with that is its own decision.
+
+Because turns run concurrently, the read loop stays free while a call is in
+flight. That is what makes a cancel frame readable at all; a caller sending one
+on a slow turn is not waiting for the turn to finish first.
 
 ## Discovery
 

@@ -257,3 +257,117 @@ func TestFirstTurnHasNoStartMessageWhenNotConfigured(t *testing.T) {
 		t.Errorf("body carries initial_assistant_message=%v, want it absent", v)
 	}
 }
+
+// blockingBackend holds every request open until its context is cancelled, and
+// records that the cancellation arrived. It is how a slow model call looks to
+// the daemon.
+type blockingBackend struct {
+	arrived  chan struct{}
+	canceled chan struct{}
+}
+
+func (b *blockingBackend) serve(t *testing.T) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// The body has to be consumed before net/http starts watching the
+		// connection, and it is that watch that reports a cancelled request.
+		_, _ = io.ReadAll(req.Body)
+		select {
+		case b.arrived <- struct{}{}:
+		default:
+		}
+		<-req.Context().Done()
+		select {
+		case b.canceled <- struct{}{}:
+		default:
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// A cancel frame abandons the turn in flight: the backend's request context is
+// cancelled, the caller gets an end frame marked cancelled, and the turn is not
+// counted. This is the regression for the blocking read loop — before it, the
+// cancel frame could not be read until the turn had already finished.
+func TestCancelAbandonsTheTurn(t *testing.T) {
+	be := &blockingBackend{
+		arrived:  make(chan struct{}, 1),
+		canceled: make(chan struct{}, 1),
+	}
+	registry := upstream.NewRegistry()
+	agent, err := upstream.New(upstream.Spec{
+		Name:      "orders",
+		Transport: be.serve(t),
+		Sessions:  true,
+	})
+	if err != nil {
+		t.Fatalf("upstream.New: %v", err)
+	}
+	if err := registry.Add(agent); err != nil {
+		t.Fatalf("registry.Add: %v", err)
+	}
+
+	conn, rd := dial(t, start(t, registry))
+	write(t, conn, protocol.TypeSession, 2, protocol.SessionRequest{
+		Op:    protocol.SessionOpNew,
+		Agent: "orders",
+	})
+	var started protocol.NewSessionResponse
+	if err := json.Unmarshal(data(t, rd), &started); err != nil {
+		t.Fatalf("decode session.new answer: %v", err)
+	}
+
+	write(t, conn, protocol.TypeMessage, 3, protocol.MessageRequest{
+		Agent:     "orders",
+		SessionID: started.Session.ID,
+		Message:   "build me an assistant",
+	})
+
+	// Wait until the turn is genuinely in flight, so the cancel cannot race the
+	// goroutine that registers it.
+	select {
+	case <-be.arrived:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the backend was never called")
+	}
+
+	write(t, conn, protocol.TypeCancel, 3, nil)
+
+	select {
+	case <-be.canceled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the backend's request was not cancelled")
+	}
+
+	f := read(t, rd)
+	if f.Type != protocol.TypeEnd {
+		t.Fatalf("cancelled turn ends with %s, want end", protocol.TypeName(f.Type))
+	}
+	var end protocol.EndPayload
+	if err := json.Unmarshal(f.Payload, &end); err != nil {
+		t.Fatalf("decode end: %v", err)
+	}
+	if end.OK {
+		t.Error("cancelled turn reports ok=true")
+	}
+	if !end.Cancelled {
+		t.Error("end frame is not marked cancelled")
+	}
+
+	// An abandoned turn is not a turn: the envelope must not move.
+	write(t, conn, protocol.TypeSession, 4, protocol.SessionRequest{
+		Op:    protocol.SessionOpList,
+		Agent: "orders",
+	})
+	var list protocol.ListSessionsResponse
+	if err := json.Unmarshal(data(t, rd), &list); err != nil {
+		t.Fatalf("decode session.list answer: %v", err)
+	}
+	if len(list.Sessions) != 1 {
+		t.Fatalf("session.list returned %d sessions, want 1", len(list.Sessions))
+	}
+	if list.Sessions[0].Turns != 0 {
+		t.Errorf("turns = %d, want 0 for a cancelled turn", list.Sessions[0].Turns)
+	}
+}

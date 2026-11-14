@@ -205,6 +205,22 @@ Answer with any 2xx and JSON:
 `session.status: "closed"` ends the conversation after the turn. A bare JSON
 string is accepted as the reply.
 
+## Cancelling a turn
+
+A caller that no longer wants an answer sends a `cancel` frame on the stream the
+`message` was sent on. The daemon stops waiting, cancels the upstream request's
+context, and answers that stream with `{"ok": false, "cancelled": true}` — no
+`data` frame, and the session is not touched, so a cancelled turn is not counted.
+
+Cancellation is **cooperative and best effort, never a rollback**: the daemon can
+abort the HTTP request the backend is still working on, but cannot undo what that
+backend already committed. A backend sees it as `r.Context().Done()` on the
+webhook request and decides what to do about it.
+
+Turns run concurrently, so the read loop stays free while a call is in flight —
+that is what makes a cancel frame readable at all. Details and the frame layout
+are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md#cancelling-a-turn).
+
 ```go
 func handler(w http.ResponseWriter, r *http.Request) {
 	var req struct {

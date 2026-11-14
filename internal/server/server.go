@@ -5,8 +5,9 @@
 //	→ message (agent, optional session id, text) → data + end
 //	→ session frame (new / list / get / close / prune)
 //
-// Messages are handled sequentially per connection; a disconnect during a
-// long call lets it finish or time out rather than tearing it down mid-flight.
+// A turn runs in its own goroutine so the read loop stays free: a cancel frame
+// has to reach a call that is already in flight. Turns still finish on their
+// own, so a disconnect mid-turn does not tear one down.
 package server
 
 import (
@@ -122,10 +123,11 @@ func (s *Server) handleConn(rw io.ReadWriteCloser, remote string) {
 	defer rw.Close()
 
 	c := &connState{
-		srv:    s,
-		rw:     rw,
-		rd:     frame.NewReader(rw),
-		remote: remote,
+		srv:      s,
+		rw:       rw,
+		rd:       frame.NewReader(rw),
+		remote:   remote,
+		inflight: map[uint32]context.CancelFunc{},
 	}
 	s.log.Printf("[%s] connection opened", remote)
 	defer s.log.Printf("[%s] connection closed", remote)
@@ -137,6 +139,11 @@ func (s *Server) handleConn(rw io.ReadWriteCloser, remote string) {
 		return
 	}
 	c.loop()
+	// Turns run in their own goroutines now. Let them finish (or be cancelled)
+	// before the transport is closed, so a disconnect mid-turn behaves the way
+	// it did with the old blocking loop: the call completes, it is not torn
+	// down.
+	c.drain()
 }
 
 type connState struct {
@@ -149,7 +156,50 @@ type connState struct {
 
 	clientID   string
 	clientName string
+
+	// inflight maps a turn's stream id to the cancel func of its upstream
+	// call. That is what a cancel frame ultimately reaches: the request
+	// context handed to the backend.
+	inflightMu sync.Mutex
+	inflight   map[uint32]context.CancelFunc
+
+	// turns tracks running turn goroutines so the transport is not closed out
+	// from under them.
+	turns sync.WaitGroup
 }
+
+// trackTurn registers a turn's cancel func so a cancel frame can find it.
+func (c *connState) trackTurn(stream uint32, cancel context.CancelFunc) {
+	c.inflightMu.Lock()
+	c.inflight[stream] = cancel
+	c.inflightMu.Unlock()
+}
+
+// untrackTurn forgets a finished turn. Cancelling a stream that is no longer
+// tracked does nothing, which is what a late cancel frame should do.
+func (c *connState) untrackTurn(stream uint32) {
+	c.inflightMu.Lock()
+	delete(c.inflight, stream)
+	c.inflightMu.Unlock()
+}
+
+// cancelTurn abandons the turn running on stream, if there is one. It cancels
+// the upstream context, which closes the backend request; whatever the backend
+// already committed is its own business, not something the daemon can undo.
+func (c *connState) cancelTurn(stream uint32) bool {
+	c.inflightMu.Lock()
+	cancel, ok := c.inflight[stream]
+	c.inflightMu.Unlock()
+	if !ok {
+		return false
+	}
+	c.srv.log.Printf("[%s] cancel stream=%d", c.remote, stream)
+	cancel()
+	return true
+}
+
+// drain waits for in-flight turns before the connection closes.
+func (c *connState) drain() { c.turns.Wait() }
 
 func (c *connState) write(f frame.Frame) error {
 	c.writeMu.Lock()
@@ -247,7 +297,17 @@ func (c *connState) loop() {
 		}
 		switch f.Type {
 		case protocol.TypeMessage:
-			c.handleMessage(f)
+			// A turn runs in its own goroutine: the read loop must stay free,
+			// or a cancel frame would sit unread until the turn finished.
+			c.turns.Add(1)
+			go func(f frame.Frame) {
+				defer c.turns.Done()
+				c.handleMessage(f)
+			}(f)
+		case protocol.TypeCancel:
+			if !c.cancelTurn(f.StreamID) {
+				c.srv.log.Printf("[%s] cancel stream=%d: nothing in flight", c.remote, f.StreamID)
+			}
 		case protocol.TypeSession:
 			c.handleSession(f)
 		case protocol.TypeNegotiate:
@@ -312,6 +372,8 @@ func (c *connState) handleMessage(f frame.Frame) {
 func (c *connState) forward(stream uint32, client upstream.Client, req protocol.MessageRequest, sessionID string, info *protocol.SessionInfo) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.srv.cfg.CallTimeout)
 	defer cancel()
+	c.trackTurn(stream, cancel)
+	defer c.untrackTurn(stream)
 
 	c.srv.log.Printf("[%s] message stream=%d agent=%q session=%q: %s",
 		c.remote, stream, client.Name(), sessionID, compact(req.Message))
@@ -341,6 +403,15 @@ func (c *connState) forward(stream uint32, client upstream.Client, req protocol.
 		},
 	})
 	if err != nil {
+		// A cancelled turn is neither a failure nor a turn: the caller gave up,
+		// so there is no envelope to hand back and nothing to count.
+		if errors.Is(ctx.Err(), context.Canceled) {
+			c.srv.log.Printf("[%s] message stream=%d agent=%q cancelled after %s",
+				c.remote, stream, client.Name(), time.Since(started).Round(time.Millisecond))
+			end, _ := json.Marshal(protocol.EndPayload{OK: false, Cancelled: true})
+			_ = c.write(frame.Frame{StreamID: stream, Type: protocol.TypeEnd, Payload: end})
+			return
+		}
 		c.srv.log.Printf("[%s] message stream=%d agent=%q failed in %s: %v",
 			c.remote, stream, client.Name(), time.Since(started).Round(time.Millisecond), err)
 		c.writeError(stream, protocol.CodeUpstreamError, err.Error())
