@@ -30,9 +30,10 @@ the business published publicly. When the layout changes, the integration breaks
 quietly. And the business has no say in any of it: no idea which agent is asking,
 no control over what it sees, no way to answer differently.
 
-vireo replaces that with one DNS lookup per domain: the client discovers the
-endpoint, reads what it offers, and starts talking. The business stays in control —
-it decides which agents exist and what answers them.
+vireo is what an assistant chooses instead of scraping. One DNS lookup per
+domain: the client discovers the endpoint, reads what it offers, and starts
+talking. The business stays in control — it decides which agents exist and what
+answers them.
 
 ### Why SRV, not a well-known URL
 
