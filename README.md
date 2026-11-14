@@ -48,7 +48,7 @@ arrives inside that authenticated connection — so the certificate at the SRV
 target has to cover the queried domain, which is the name the client sends as
 `ServerName`.
 
-## Demo
+## What a session looks like
 
 An assistant asks the business a question in plain language and gets an answer —
 opening hours, prices, availability, whether they cover your area. Here is the
@@ -73,60 +73,40 @@ Then keep asking: the conversation is a session, so a follow-up carries the
 thread instead of starting over. Swap the agents for a restaurant, a clinic or a
 booking desk and the shape is the same — the answers come from the business.
 
-The endpoint above is an example. The live one is [ziwa.ai](https://ziwa.ai):
-`connect ziwa.ai` from either client below, and it lists whoever that business
-publishes today.
+The business above is fictional — [ziwa.ai](https://ziwa.ai) is the real one.
 
-## Try it yourself
+## Live demo
 
-Talking to a business needs a client and nothing else — the endpoint is already
-running. Two clients exist:
+Nothing to install on the business side; it is already running. With a client
+built in the next section, one command:
 
-- **`vireo-chat`** — a terminal client, for talking to a daemon by hand.
-- **`vireo-mcp`** — the MCP bridge, so an AI host does the talking
-  ([Connecting an AI](#connecting-an-ai-vireo-mcp)).
+```bash
+./vireo-chat connect ziwa.ai
+```
+
+`connect ziwa.ai` resolves through `_vireo._tcp.ziwa.ai`, lists what that business
+publishes today, and opens a session. From an AI host, the same host name through
+[vireo-mcp](#connecting-an-ai-vireo-mcp).
+
+## Install
+
+Two binaries come from this repository: `vireo`, the daemon, and `vireo-chat`, a
+terminal client. `fakeagent` is a stub backend used to test a webhook. The other
+client, **`vireo-mcp`**, is the MCP bridge so an AI host does the talking — it
+lives in its own repository ([Connecting an AI](#connecting-an-ai-vireo-mcp)).
 
 ```bash
 git clone https://github.com/ground-creative/vireo.git
 cd vireo
-go build -o vireo-chat ./cmd/vireo-chat
-./vireo-chat connect ziwa.ai
-```
-
-`connect ziwa.ai` resolves through `_vireo._tcp.ziwa.ai`, lists what the business
-publishes, and opens a session. No config, no key and no model on your side.
-
-Tagged releases with prebuilt binaries for Linux and macOS (amd64, arm64) are
-intended so you can skip the Go toolchain — nothing is published yet, so build
-from source.
-
-## Run it locally
-
-The other half: your own endpoint, with your own backend behind it. Use this to
-try the daemon on your machine, or while writing the webhook a business would
-point at. `cmd/fakeagent` covers the second case — a stub backend that answers
-every turn without a model, so the wire path is visible before anything real
-exists.
-
-```bash
 go build -o vireo .
-go build -o fakeagent  ./cmd/fakeagent
 go build -o vireo-chat ./cmd/vireo-chat
-
-./fakeagent            # 1. stub backend on :8088
-./vireo --config demo  # 2. daemon, TLS + QUIC on :7777
-./vireo-chat           # 3. client, in another terminal
+go build -o fakeagent  ./cmd/fakeagent
 ```
-
-In the client, `connect localhost:7777` lists the agents from
-`config/demo.yaml`. `--config` is required; the daemon reads YAML only from
-`config/`.
 
 `vireo` is the daemon and nothing else is needed to run it: no AI, no model, no
-API key. It forwards each turn to whatever `transport` names, so `fakeagent`
-disappears the moment you have a service of your own.
+API key. It forwards each turn to whatever `transport` names.
 
-Docker runs the same daemon:
+Docker builds the same binary:
 
 ```bash
 docker build -t vireo .
@@ -137,6 +117,26 @@ docker run --rm -p 7777:7777/tcp -p 7777:7777/udp \
 ```
 
 Both protocols must be published: `7777/tcp` for TLS, `7777/udp` for QUIC.
+
+Tagged releases with prebuilt binaries for Linux and macOS (amd64, arm64) are
+intended so you can skip the Go toolchain — nothing is published yet, so build
+from source.
+
+### Check the install
+
+Three processes, three terminals, no model anywhere — the local run is the
+quickest proof the build works:
+
+```bash
+./fakeagent            # 1. stub backend on :8088
+./vireo --config demo  # 2. daemon, TLS + QUIC on :7777
+./vireo-chat           # 3. client, in another terminal
+```
+
+In the client, `connect localhost:7777` lists the agents from `config/demo.yaml`
+and any message gets the stub's answer. `--config` is required; the daemon reads
+YAML only from `config/`. `fakeagent` stands in for your own backend and
+disappears the moment `transport` names a real service.
 
 ## Configuration
 
