@@ -79,8 +79,8 @@ publishes today.
 
 ## Try it yourself
 
-The demo above needs a client and nothing else — the endpoint is already running.
-There are two:
+Talking to a business needs a client and nothing else — the endpoint is already
+running. Two clients exist:
 
 - **`vireo-chat`** — a terminal client, for talking to a daemon by hand.
 - **`vireo-mcp`** — the MCP bridge, so an AI host does the talking
@@ -93,18 +93,40 @@ go build -o vireo-chat ./cmd/vireo-chat
 ./vireo-chat connect ziwa.ai
 ```
 
-That is the whole thing for a client: no config, no key, no model on your side.
 `connect ziwa.ai` resolves through `_vireo._tcp.ziwa.ai`, lists what the business
-publishes, and opens a session.
+publishes, and opens a session. No config, no key and no model on your side.
 
-To publish your own agents you run the daemon:
+Tagged releases with prebuilt binaries for Linux and macOS (amd64, arm64) are
+intended so you can skip the Go toolchain — nothing is published yet, so build
+from source.
+
+## Run it locally
+
+The other half: your own endpoint, with your own backend behind it. Use this to
+try the daemon on your machine, or while writing the webhook a business would
+point at. `cmd/fakeagent` covers the second case — a stub backend that answers
+every turn without a model, so the wire path is visible before anything real
+exists.
 
 ```bash
 go build -o vireo .
-./vireo --config demo          # reads config/demo.yaml
+go build -o fakeagent  ./cmd/fakeagent
+go build -o vireo-chat ./cmd/vireo-chat
+
+./fakeagent            # 1. stub backend on :8088
+./vireo --config demo  # 2. daemon, TLS + QUIC on :7777
+./vireo-chat           # 3. client, in another terminal
 ```
 
-Docker works the same way:
+In the client, `connect localhost:7777` lists the agents from
+`config/demo.yaml`. `--config` is required; the daemon reads YAML only from
+`config/`.
+
+`vireo` is the daemon and nothing else is needed to run it: no AI, no model, no
+API key. It forwards each turn to whatever `transport` names, so `fakeagent`
+disappears the moment you have a service of your own.
+
+Docker runs the same daemon:
 
 ```bash
 docker build -t vireo .
@@ -115,12 +137,6 @@ docker run --rm -p 7777:7777/tcp -p 7777:7777/udp \
 ```
 
 Both protocols must be published: `7777/tcp` for TLS, `7777/udp` for QUIC.
-`./cmd/fakeagent` is a stub webhook for testing your own backend; it is not part
-of a deployment.
-
-Tagged releases with prebuilt binaries for Linux and macOS (amd64, arm64) are
-intended so you can skip the Go toolchain — nothing is published yet, so build
-from source.
 
 ## Configuration
 
