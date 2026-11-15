@@ -76,6 +76,7 @@ const (
 	CodeUpstreamError   = "upstream_error"
 	CodeInvalidFrame    = "invalid_frame"
 	CodeInternal        = "internal"
+	CodeRateLimited     = "rate_limited"
 )
 
 // Session statuses.

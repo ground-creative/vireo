@@ -37,13 +37,34 @@ type config struct {
 	Agents    []agentConf       `yaml:"agents"`
 }
 
+// rateLimitConf is a pointer in serverConf, and Enabled is a pointer here, so
+// the YAML can tell three cases apart:
+//
+//	no rate_limit block      -> limiting off
+//	rate_limit block         -> limiting on with the defaults
+//	rate_limit.enabled=false -> limiting off explicitly
+//
+// A plain bool cannot express the middle case: it would read as false.
+type rateLimitConf struct {
+	Enabled           *bool                     `yaml:"enabled"`
+	RequestsPerMinute int                       `yaml:"requests_per_minute"`
+	Burst             int                       `yaml:"burst"`
+	Agents            map[string]AgentRateLimit `yaml:"agents"`
+}
+
+type AgentRateLimit struct {
+	RequestsPerMinute int `yaml:"requests_per_minute"`
+	Burst             int `yaml:"burst"`
+}
+
 type serverConf struct {
-	Port        int          `yaml:"port"`
-	CertFile    string       `yaml:"cert_file"`
-	KeyFile     string       `yaml:"key_file"`
-	ALPN        []string     `yaml:"alpn"`
-	CallTimeout string       `yaml:"call_timeout"`
-	Endpoint    endpointConf `yaml:"endpoint"`
+	Port        int            `yaml:"port"`
+	CertFile    string         `yaml:"cert_file"`
+	KeyFile     string         `yaml:"key_file"`
+	ALPN        []string       `yaml:"alpn"`
+	CallTimeout string         `yaml:"call_timeout"`
+	RateLimit   *rateLimitConf `yaml:"rate_limit"`
+	Endpoint    endpointConf   `yaml:"endpoint"`
 }
 
 type endpointConf struct {
@@ -134,6 +155,7 @@ func main() {
 		ListSessions: cfg.Session.List,
 		Retention:    retention,
 		CallTimeout:  callTimeout(cfg),
+		RateLimit:    buildRateLimitConfig(cfg.Server.RateLimit),
 		Logger:       log.Default(),
 	})
 
@@ -371,6 +393,32 @@ func callTimeout(cfg *config) time.Duration {
 		return derived
 	}
 	return d
+}
+
+// buildRateLimitConfig converts the YAML rate limit config to the server's
+// internal type. A missing block disables limiting; a present block enables it
+// unless it says `enabled: false`. Zero rates are left alone here: server.New
+// turns them into the 60/min, burst 10 defaults.
+func buildRateLimitConfig(rl *rateLimitConf) server.RateLimitConfig {
+	if rl == nil {
+		return server.RateLimitConfig{Enabled: false}
+	}
+	if rl.Enabled != nil && !*rl.Enabled {
+		return server.RateLimitConfig{Enabled: false}
+	}
+	agentOverrides := make(map[string]server.AgentRateLimit, len(rl.Agents))
+	for name, override := range rl.Agents {
+		agentOverrides[name] = server.AgentRateLimit{
+			RequestsPerMinute: override.RequestsPerMinute,
+			Burst:             override.Burst,
+		}
+	}
+	return server.RateLimitConfig{
+		Enabled:           true,
+		RequestsPerMinute: rl.RequestsPerMinute,
+		Burst:             rl.Burst,
+		AgentOverrides:    agentOverrides,
+	}
 }
 
 // buildRegistry turns agent config into clients and resolves inheritance

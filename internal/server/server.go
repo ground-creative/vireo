@@ -31,6 +31,67 @@ import (
 	"vireo/internal/upstream"
 )
 
+// RateLimitConfig holds rate limiting configuration.
+type RateLimitConfig struct {
+	Enabled           bool
+	RequestsPerMinute int
+	Burst             int
+	AgentOverrides    map[string]AgentRateLimit
+}
+
+// AgentRateLimit holds per-agent rate limit overrides.
+type AgentRateLimit struct {
+	RequestsPerMinute int
+	Burst             int
+}
+
+// tokenBucket implements a simple token bucket for rate limiting.
+type tokenBucket struct {
+	mu         sync.Mutex
+	rate       float64 // tokens per second
+	burst      int
+	tokens     float64
+	lastRefill time.Time
+}
+
+func newTokenBucket(requestsPerMinute, burst int) *tokenBucket {
+	return &tokenBucket{
+		rate:       float64(requestsPerMinute) / 60.0,
+		burst:      burst,
+		tokens:     float64(burst),
+		lastRefill: time.Now(),
+	}
+}
+
+func (tb *tokenBucket) Take() bool {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	now := time.Now()
+	elapsed := now.Sub(tb.lastRefill).Seconds()
+	tb.tokens = min(float64(tb.burst), tb.tokens+elapsed*tb.rate)
+	tb.lastRefill = now
+
+	if tb.tokens >= 1 {
+		tb.tokens--
+		return true
+	}
+	return false
+}
+
+func (tb *tokenBucket) RetryAfter() time.Duration {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	if tb.tokens >= 1 {
+		return 0
+	}
+	// Time until we have 1 token
+	needed := 1 - tb.tokens
+	seconds := needed / tb.rate
+	return time.Duration(seconds * float64(time.Second))
+}
+
 // Config wires the server together.
 type Config struct {
 	TLS          *tls.Config
@@ -40,15 +101,17 @@ type Config struct {
 	ListSessions bool
 	Retention    time.Duration
 	CallTimeout  time.Duration
+	RateLimit    RateLimitConfig
 	Logger       *log.Logger
 }
 
 // Server owns the listeners.
 type Server struct {
-	cfg     Config
-	log     *log.Logger
-	mu      sync.Mutex
-	closers []io.Closer
+	cfg      Config
+	log      *log.Logger
+	mu       sync.Mutex
+	closers  []io.Closer
+	limiters sync.Map // clientID -> *tokenBucket
 }
 
 func New(cfg Config) *Server {
@@ -58,7 +121,36 @@ func New(cfg Config) *Server {
 	if cfg.CallTimeout <= 0 {
 		cfg.CallTimeout = 30 * time.Second
 	}
+	// Apply rate limit defaults
+	if cfg.RateLimit.Enabled && cfg.RateLimit.RequestsPerMinute <= 0 {
+		cfg.RateLimit.RequestsPerMinute = 60
+	}
+	if cfg.RateLimit.Enabled && cfg.RateLimit.Burst <= 0 {
+		cfg.RateLimit.Burst = 10
+	}
 	return &Server{cfg: cfg, log: cfg.Logger}
+}
+
+func (s *Server) getLimiter(clientID, agent string) *tokenBucket {
+	if !s.cfg.RateLimit.Enabled {
+		return nil
+	}
+
+	// Check for per-agent override
+	rate := s.cfg.RateLimit.RequestsPerMinute
+	burst := s.cfg.RateLimit.Burst
+	if override, ok := s.cfg.RateLimit.AgentOverrides[agent]; ok {
+		if override.RequestsPerMinute > 0 {
+			rate = override.RequestsPerMinute
+		}
+		if override.Burst > 0 {
+			burst = override.Burst
+		}
+	}
+
+	key := clientID + "|" + agent
+	val, _ := s.limiters.LoadOrStore(key, newTokenBucket(rate, burst))
+	return val.(*tokenBucket)
 }
 
 func (s *Server) track(c io.Closer) {
@@ -341,6 +433,16 @@ func (c *connState) handleMessage(f frame.Frame) {
 	if !ok {
 		c.writeError(f.StreamID, protocol.CodeAgentNotFound, fmt.Sprintf("no agent named %q", req.Agent))
 		return
+	}
+
+	// Rate limit check (per client_id + agent)
+	if limiter := c.srv.getLimiter(c.clientID, client.Name()); limiter != nil {
+		if !limiter.Take() {
+			retryAfter := limiter.RetryAfter()
+			c.writeError(f.StreamID, protocol.CodeRateLimited,
+				fmt.Sprintf("rate limit exceeded for agent %q; retry after %s", client.Name(), retryAfter.Round(time.Second)))
+			return
+		}
 	}
 
 	sessionID := strings.TrimSpace(req.SessionID)

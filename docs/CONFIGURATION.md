@@ -64,17 +64,57 @@ agents:
 
 ## `server`
 
-| Key                    | Type   | Default          | Meaning                                              |
-| ---------------------- | ------ | ---------------- | ---------------------------------------------------- |
-| `port`                 | int    | —                | TCP and UDP port; unset means the OS assigns one     |
-| `cert_file`            | string | —                | PEM certificate chain                                |
-| `key_file`             | string | —                | PEM private key                                      |
-| `alpn`                 | list   | `["vireo/1"]`    | negotiated protocols; `h3` is dropped with a warning |
-| `endpoint.id`          | string | —                | stable id peers see in the manifest                  |
-| `endpoint.name`        | string | first agent name | display name                                         |
-| `endpoint.description` | string | —                | one-line description                                 |
+| Key                    | Type     | Default          | Meaning                                                               |
+| ---------------------- | -------- | ---------------- | --------------------------------------------------------------------- |
+| `port`                 | int      | —                | TCP and UDP port; unset means the OS assigns one                      |
+| `cert_file`            | string   | —                | PEM certificate chain                                                 |
+| `key_file`             | string   | —                | PEM private key                                                       |
+| `alpn`                 | list     | `["vireo/1"]`    | negotiated protocols; `h3` is dropped with a warning                  |
+| `call_timeout`         | duration | derived          | global ceiling for agent calls; default = longest agent timeout + 15s |
+| `endpoint.id`          | string   | —                | stable id peers see in the manifest                                   |
+| `endpoint.name`        | string   | first agent name | display name                                                          |
+| `endpoint.description` | string   | —                | one-line description                                                  |
 
 TLS 1.3 is required. There is no plaintext mode.
+
+## `rate_limit`
+
+Optional per-client rate limiting (token bucket). The block decides everything:
+
+| Config                          | Effect                                   |
+| ------------------------------- | ---------------------------------------- |
+| no `rate_limit` block           | limiting off                             |
+| `rate_limit:` block             | limiting on, with the defaults below     |
+| `rate_limit: {enabled: false}`  | limiting off, explicitly                 |
+
+| Key                   | Type | Default | Meaning                                    |
+| --------------------- | ---- | ------- | ------------------------------------------ |
+| `enabled`             | bool | `true`  | master switch (only written to turn it off) |
+| `requests_per_minute` | int  | `60`    | sustained rate per client per agent        |
+| `burst`               | int  | `10`    | token bucket depth (allows short bursts)   |
+| `agents`              | map  | `{}`    | per-agent overrides (keys are agent names) |
+
+Per-agent overrides inherit missing fields from the global values; a field set
+to `0` is treated as missing, so there is no way to express "zero requests" for
+one agent — disable limiting globally or pick a low rate instead.
+
+```yaml
+server:
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+    burst: 10
+    agents:
+      agent-creator:
+        requests_per_minute: 10
+        burst: 2
+      sales-representative:
+        requests_per_minute: 30
+        burst: 5
+```
+
+When a client exceeds the limit, the daemon returns error code `rate_limited`
+with a message indicating the retry delay.
 
 ## `transport`
 

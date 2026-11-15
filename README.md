@@ -144,6 +144,11 @@ server:
   port: 7777
   cert_file: "certs/cert.pem"
   key_file: "certs/key.pem"
+  call_timeout: "45s"
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+    burst: 10
   endpoint:
     id: "restaurant"
     name: "restaurant"
@@ -168,6 +173,27 @@ agents:
 Configs live in `config/`; anything outside it is refused. TLS 1.3 is required —
 there is no plaintext mode. Every key, default and inheritance rule is in
 [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+
+### Rate limiting
+
+Optional per-client token bucket rate limiting. The block is the switch: leave
+it out and limiting stays off, write it and limiting is on with the defaults,
+or set `enabled: false` to turn it off while keeping the numbers around:
+
+```yaml
+server:
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60 # sustained rate per client per agent
+    burst: 10 # token bucket depth
+    agents: # per-agent overrides
+      agent-creator:
+        requests_per_minute: 10
+        burst: 2
+```
+
+When a client exceeds the limit, the daemon returns error code `rate_limited`
+with a retry delay. Set `enabled: false` to disable.
 
 An agent with a `start_message` opens every conversation with that greeting:
 the client shows it as soon as the session exists, and the backend is told on

@@ -371,3 +371,62 @@ func TestCancelAbandonsTheTurn(t *testing.T) {
 		t.Errorf("turns = %d, want 0 for a cancelled turn", list.Sessions[0].Turns)
 	}
 }
+
+// A zero rate or burst means "not configured", so New fills in 60/min with a
+// depth of 10 rather than creating a bucket that never lets a call through.
+func TestRateLimitDefaultsWhenEnabled(t *testing.T) {
+	s := New(Config{RateLimit: RateLimitConfig{Enabled: true}})
+	if got := s.cfg.RateLimit.RequestsPerMinute; got != 60 {
+		t.Errorf("requests_per_minute = %d, want the default 60", got)
+	}
+	if got := s.cfg.RateLimit.Burst; got != 10 {
+		t.Errorf("burst = %d, want the default 10", got)
+	}
+}
+
+// No block in config means no buckets at all, so the message path must never
+// see a limiter it could reject on.
+func TestGetLimiterIsNilWhenDisabled(t *testing.T) {
+	s := New(Config{})
+	if tb := s.getLimiter("vireo_0123456789abcdef0123456789abcdef", "orders"); tb != nil {
+		t.Fatalf("getLimiter returned %+v, want nil while disabled", tb)
+	}
+}
+
+// The bucket hands out its burst in a row, then refuses until a token refills.
+func TestTokenBucketAllowsBurstThenRefuses(t *testing.T) {
+	tb := newTokenBucket(60, 2) // one token per second, depth two
+
+	for i := 1; i <= 2; i++ {
+		if !tb.Take() {
+			t.Fatalf("take %d refused inside the burst", i)
+		}
+	}
+	if tb.Take() {
+		t.Fatal("take 3 accepted; burst is 2")
+	}
+	if got := tb.RetryAfter(); got <= 0 {
+		t.Errorf("RetryAfter = %s, want a positive delay", got)
+	}
+}
+
+// An agent override replaces the global rate and burst, and leaves the other
+// agents on the global numbers.
+func TestGetLimiterAppliesAgentOverride(t *testing.T) {
+	s := New(Config{RateLimit: RateLimitConfig{
+		Enabled:           true,
+		RequestsPerMinute: 60,
+		Burst:             10,
+		AgentOverrides: map[string]AgentRateLimit{
+			"slow": {RequestsPerMinute: 6, Burst: 1},
+		},
+	}})
+	const clientID = "vireo_0123456789abcdef0123456789abcdef"
+
+	if slow := s.getLimiter(clientID, "slow"); slow.burst != 1 {
+		t.Errorf("slow burst = %d, want the override 1", slow.burst)
+	}
+	if other := s.getLimiter(clientID, "orders"); other.burst != 10 {
+		t.Errorf("orders burst = %d, want the global 10", other.burst)
+	}
+}

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // A YAML entry without a name must be reported with its index, so a broken
@@ -149,3 +151,56 @@ func TestCallTimeoutFollowsTheSlowestAgent(t *testing.T) {
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// A missing rate_limit block means "no limiting"; a present block means
+// "limiting with the defaults". A plain bool cannot tell those apart, so the
+// three cases are pinned here.
+func TestRateLimitBlockPresence(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		enabled bool
+	}{
+		{name: "block absent", yaml: "port: 7777\n", enabled: false},
+		{name: "block without enabled key", yaml: "rate_limit:\n  requests_per_minute: 120\n  burst: 4\n", enabled: true},
+		{name: "block enabled explicitly", yaml: "rate_limit:\n  enabled: true\n", enabled: true},
+		{name: "block disabled explicitly", yaml: "rate_limit:\n  enabled: false\n", enabled: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var sc serverConf
+			if err := yaml.Unmarshal([]byte(tc.yaml), &sc); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if got := buildRateLimitConfig(sc.RateLimit); got.Enabled != tc.enabled {
+				t.Errorf("Enabled = %v, want %v", got.Enabled, tc.enabled)
+			}
+		})
+	}
+}
+
+// Configured values reach the server untouched, so server.New can fill in the
+// 60/min and burst 10 defaults only where nothing was set.
+func TestRateLimitCarriesValuesAndOverrides(t *testing.T) {
+	var sc serverConf
+	doc := "rate_limit:\n" +
+		"  requests_per_minute: 120\n" +
+		"  burst: 4\n" +
+		"  agents:\n" +
+		"    slow:\n" +
+		"      requests_per_minute: 6\n" +
+		"      burst: 1\n"
+	if err := yaml.Unmarshal([]byte(doc), &sc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	got := buildRateLimitConfig(sc.RateLimit)
+	if !got.Enabled {
+		t.Fatal("Enabled = false, want true")
+	}
+	if got.RequestsPerMinute != 120 || got.Burst != 4 {
+		t.Errorf("global = %d/min burst %d, want 120/min burst 4", got.RequestsPerMinute, got.Burst)
+	}
+	if override := got.AgentOverrides["slow"]; override.RequestsPerMinute != 6 || override.Burst != 1 {
+		t.Errorf("slow override = %d/min burst %d, want 6/min burst 1", override.RequestsPerMinute, override.Burst)
+	}
+}
