@@ -339,14 +339,16 @@ disappears the moment `transport` names a real service.
 
 ### Certificate verification in the clients
 
-Both bundled clients default to `-insecure`, which sets `InsecureSkipVerify`: the
-TLS handshake still completes and the traffic is still encrypted, but any
-certificate is accepted. That is what makes `scripts/gen-certs.sh` and a local
-`localhost:7777` work out of the box, and it is a development setting, not a
-production one. With no certificate check, nothing binds the connection to the
-business being contacted, so an active attacker on the path can present its own
-certificate and the client cannot tell. Against a deployment whose certificate
-chains to a public CA, turn verification back on explicitly:
+Both current clients (`vireo-chat` and `vireo-mcp`) default to `-insecure`, which
+sets `InsecureSkipVerify`: the TLS handshake still completes and the traffic is
+still encrypted, but any certificate is accepted. The two are maintained in
+separate repositories: `vireo-chat` here, `vireo-mcp` in its own. That is what
+makes `scripts/gen-certs.sh` and a local `localhost:7777` work out of the box,
+and it is a development setting, not a production one. With no certificate check,
+nothing binds the connection to the business being contacted, so an active
+attacker on the path can present its own certificate and the client cannot tell.
+Against a deployment whose certificate chains to a public CA, turn verification
+back on explicitly:
 
 ```bash
 ./vireo-chat -insecure=false connect agent.example.com

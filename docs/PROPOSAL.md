@@ -51,10 +51,11 @@ without asking anyone to adopt a platform.
 
 ## Why DNS is an interesting foundation
 
-DNS is a discovery mechanism every organization already operates, and it is
-distributed and delegated by construction: each zone is authoritative for its own
-records, the domain operator controls those records through the DNS provider they
-choose, and no registry has to approve a new record before it works.
+DNS is a discovery mechanism that every organization with a registered domain
+already operates, and it is distributed and delegated by construction: each zone
+is authoritative for its own records, the domain operator controls those records
+through the DNS provider they choose, and no registry has to approve a new record
+before it works.
 
 It is also deliberately narrow, and that narrowness is useful. DNS provides
 service discovery and routing — the target host and port for a named service —
