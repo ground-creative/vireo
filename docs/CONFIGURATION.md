@@ -81,18 +81,18 @@ TLS 1.3 is required. There is no plaintext mode.
 
 Optional per-client rate limiting (token bucket). The block decides everything:
 
-| Config                          | Effect                                   |
-| ------------------------------- | ---------------------------------------- |
-| no `rate_limit` block           | limiting off                             |
-| `rate_limit:` block             | limiting on, with the defaults below     |
-| `rate_limit: {enabled: false}`  | limiting off, explicitly                 |
+| Config                         | Effect                               |
+| ------------------------------ | ------------------------------------ |
+| no `rate_limit` block          | limiting off                         |
+| `rate_limit:` block            | limiting on, with the defaults below |
+| `rate_limit: {enabled: false}` | limiting off, explicitly             |
 
-| Key                   | Type | Default | Meaning                                    |
-| --------------------- | ---- | ------- | ------------------------------------------ |
+| Key                   | Type | Default | Meaning                                     |
+| --------------------- | ---- | ------- | ------------------------------------------- |
 | `enabled`             | bool | `true`  | master switch (only written to turn it off) |
-| `requests_per_minute` | int  | `60`    | sustained rate per client per agent        |
-| `burst`               | int  | `10`    | token bucket depth (allows short bursts)   |
-| `agents`              | map  | `{}`    | per-agent overrides (keys are agent names) |
+| `requests_per_minute` | int  | `60`    | sustained rate per client per agent         |
+| `burst`               | int  | `10`    | token bucket depth (allows short bursts)    |
+| `agents`              | map  | `{}`    | per-agent overrides (keys are agent names)  |
 
 Per-agent overrides inherit missing fields from the global values; a field set
 to `0` is treated as missing, so there is no way to express "zero requests" for
