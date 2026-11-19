@@ -1,52 +1,251 @@
-# vireo
+# Vireo
 
-**vireo lets an AI assistant talk to a business directly.** The business runs one
-small daemon at its own domain; any AI host that looks the domain up gets the list
-of agents that business exposes and can hold a real conversation with them. The
-answers still come from the business — vireo routes each turn to its webhook and
-keeps the session. Nothing else.
+**An open protocol for direct communication between AI agents and businesses —
+with a working reference implementation in Go.**
 
-It was built by asking an AI to design the protocol it would use itself.
+A business is already discoverable through its domain name. Vireo starts from the
+question of why an AI agent should not discover the business _itself_ the same
+way: DNS-based discovery, a manifest of what that business chooses to expose, and
+a session to hold the conversation in.
+
+The goal is a protocol anyone can implement. A business runs one small daemon on
+its own infrastructure; any client that speaks `vireo/1` and looks the domain up
+gets the list of agents that business exposes and can talk to them directly. The
+answers still come from the business — the daemon routes each turn to its webhook
+and keeps the session. Nothing else. MCP-speaking hosts reach a daemon through the
+optional `vireo-mcp` bridge; other runtimes can implement `vireo/1` natively.
 
 ```text
 AI host ──MCP──▶ vireo-mcp ──[DNS SRV + vireo/1]──▶ vireo ──HTTP POST──▶ your backend
 ```
 
-## What it is
+Three things sit side by side here, and keeping them apart is the point of this
+README:
+
+|                                  | What it is                                                                     | Where                                  |
+| -------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------- |
+| **The open protocol initiative** | The shared effort to agree on rules for direct agent-to-business communication | [`docs/PROPOSAL.md`](docs/PROPOSAL.md) |
+| **`vireo/1`**                    | The concrete wire protocol implemented here today                              | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) |
+| **Vireo**                        | The Go daemon and clients that demonstrate the architecture                    | this repository                        |
+
+Vireo is a starting point for that effort, not the owner of the proposed standard.
+`vireo/1` is one working implementation of the idea, not a ratified
+specification.
+
+## The problem
+
+Connecting an AI assistant to a service today usually means one of three
+service-specific approaches: scrape the site, write custom API glue for every
+assistant, or run a separate MCP server for every vendor you want to reach. Each
+can work in isolation, and a custom API or an MCP server can implement discovery
+and multi-turn sessions as well as anything else — if someone builds it for that
+service. What does not exist is a common discovery and communication contract, so
+each integration is its own implementation and none of it carries over to the next
+business or the next assistant.
+
+Each option has a price, and scraping has the highest. It pays in tokens: a page
+of HTML is mostly navigation, script and styling, and one answer often needs
+several pages read. Then the site pushes back — bot walls, captchas and
+fingerprinting exist to stop exactly this, so the agent ends up impersonating a
+human browser to read a page the business published publicly. When the layout
+changes, the integration breaks quietly. And in that path the business has no say
+in the automated access to pages it published publicly: no idea which agent is
+asking, no control over what it sees, no way to answer differently.
+
+vireo is what an assistant chooses instead of scraping when the business exposes
+a compatible endpoint. Discovery is DNS-based — an SRV lookup for the domain, then
+resolution of the target host — and from there the client reads what the business
+offers and starts talking. The business stays in control: it decides which agents
+exist and what answers them.
+
+## The idea
+
+A domain is already a discovery mechanism. It names the business, and the business
+registers and maintains it, typically managing the DNS records through a provider.
+That is a different position from a listing in a directory, a marketplace or an
+AI vendor's catalogue. What if the domain also answered the question "what agents
+does this business expose, and how do I talk to them?"
+
+In the model proposed here, an agent would:
+
+1. **Discover** the business endpoint through DNS.
+2. **Retrieve** a manifest of the capabilities the business chooses to expose.
+3. **Establish** a session.
+4. **Communicate** through a shared protocol.
+5. **Receive** explicit responses, progress and execution outcomes.
+
+The business keeps everything that makes it a business: its backend, its agents,
+its models, its business logic, its data and its infrastructure. The protocol
+standardizes the contract between the two sides, not the software running behind
+it.
+
+## Proposed architecture
+
+The protocol we are working towards would define:
+
+1. **Discovery** — DNS-based discovery of the service associated with a business
+   domain.
+2. **Connection** — an authenticated connection to the discovered endpoint.
+3. **Manifest** — the agents, capabilities and published references the business
+   makes available.
+4. **Sessions** — establishing and maintaining a communication session between an
+   agent and a service.
+5. **Execution** — requests, responses, progress, and explicit completion or
+   failure signals.
+6. **Security** — identity, authentication, authorization and capability
+   boundaries.
+
+No separate application-level agent directory or centralized discovery service is
+required: DNS carries discovery, and the manifest carries the rest. No particular
+AI model or agent framework needs to be involved on either side.
+
+The current `vireo/1` protocol implements a concrete subset of this — framing,
+handshake, manifest, sessions, messages, a webhook contract, progress and
+cancellation — and is specified frame by frame in
+[`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+
+## The open protocol initiative
+
+The architecture is the easy part to describe and the hard part to agree on. The
+initiative is the work of turning it into a standard that independent developers
+can implement without depending on a particular vendor, programming language or
+agent framework. Its value comes from interoperability, and interoperability only
+happens if the rules are built in the open, by more than the people who wrote the
+first implementation.
+
+The deeper reasoning, the protocol principles, the open questions and the
+invitation to take part are in [`docs/PROPOSAL.md`](docs/PROPOSAL.md). Nothing here
+claims that `vireo/1` has already been adopted as an independent community
+standard; it is the starting point we can experiment with today.
+
+## Vireo as the reference implementation
+
+### What Vireo is
 
 A single Go binary per domain. It listens on one port with TLS 1.3 and QUIC, is
-found through a standard DNS SRV record (`_vireo._tcp.<domain>`), and serves a
-runtime manifest: the agents that domain exposes, plus the references it publishes
-alongside them — a site, docs, a wiki, a status page. Every turn then goes to one
-HTTP webhook. No model, no API key, no per-vendor client code.
+found through the current Vireo discovery convention, a DNS SRV record at
+`_vireo._tcp.<domain>`, and serves a runtime manifest: the agents that domain
+exposes, plus the references it publishes alongside them — a site, docs, a wiki,
+a status page. Every turn then goes to one HTTP webhook. No model, no API key,
+no per-vendor client code.
 
-## What it solves
+It was built by asking an AI to design the protocol it would use itself.
 
-Connecting an AI assistant to a service today means one of three bad options: scrape the site, write custom API glue for every assistant, or install a separate MCP server for every vendor you want to reach. None of them scale past the first integration, and none of them give you runtime discovery or multi-turn state.
+### What Vireo does — and what it does not do
 
-Each option has a price. Scraping pays in tokens: a page of HTML is mostly
-navigation, script and styling, and one answer often needs several pages read.
-Then the site pushes back — bot walls, captchas and fingerprinting exist to stop
-exactly this, so the agent ends up impersonating a human browser to read a page
-the business published publicly. When the layout changes, the integration breaks
-quietly. And the business has no say in any of it: no idea which agent is asking,
-no control over what it sees, no way to answer differently.
+It does:
 
-vireo is what an assistant chooses instead of scraping. One DNS lookup per
-domain: the client discovers the endpoint, reads what it offers, and starts
-talking. The business stays in control — it decides which agents exist and what
-answers them.
+- serve one port carrying both TCP + TLS 1.3 and UDP + QUIC, with ALPN selecting
+  `vireo/1`;
+- answer discovery for a domain through the single `_vireo._tcp` SRV record,
+  with no assumed port;
+- publish a runtime manifest of agents, session commands and static `refs`;
+- hold session envelopes and forward every turn to one HTTP webhook;
+- relay progress lines and cancellation between the caller and that webhook.
 
-### Why SRV, not a well-known URL
+It does not:
 
-A2A publishes its Agent Card at `https://{domain}/.well-known/agent-card.json`,
-which pins the endpoint to the web origin's host and port. An SRV record names
-infrastructure independently of the website: another host, another port, another
-protocol. SIP (RFC 3263), XMPP, LDAP and Matrix all use SRV for exactly this
-reason. The layers differ: DNS only routes, TLS authenticates, and the manifest
-arrives inside that authenticated connection — so the certificate at the SRV
-target has to cover the queried domain, which is the name the client sends as
-`ServerName`.
+- run a model, hold an API key, or contain business logic — whatever answers
+  behind the webhook is the business's own choice;
+- answer on the business's behalf; the daemon routes, the backend replies;
+- store message content: session records are envelopes only — dates, summary,
+  turn count;
+- keep a registry. There is no separate application-level agent directory;
+  discovery is DNS, and the manifest is served per endpoint;
+- terminate HTTP. It speaks raw TLS and QUIC on its own port, so an nginx or
+  Caddy reverse proxy cannot sit in front of it;
+- require MCP. The MCP bridge is one adapter for hosts that speak MCP, not part
+  of the protocol.
+
+## Complete architecture: the two repositories
+
+The current Vireo reference implementation spans two repositories. `vireo` — the
+business-side daemon, its direct terminal client `vireo-chat`, and the
+`fakeagent` test backend — carries the protocol implementation and belongs on the
+business side. `vireo-mcp` is the optional AI-host-side adapter that lets an
+MCP-speaking host reach a daemon.
+
+Together they are one implementation: a daemon and an adapter for the same
+protocol. They are not two independent implementations of it. Independent
+implementations are what the community has yet to build, and what the initiative
+is for.
+
+```text
+        AI host  (Claude Desktop · Cursor · VS Code · any MCP host)
+           │
+           │ MCP — stdio or Streamable HTTP
+           ▼
+      ┌───────────┐
+      │ vireo-mcp │   AI-host side · separate repository
+      └─────┬─────┘
+            │ vireo/1 over TLS 1.3 (TCP) or QUIC (UDP)
+            │ endpoint found by DNS SRV: _vireo._tcp.<domain>
+            ▼
+      ┌───────────┐
+      │   vireo   │   business side · this repository
+      │  daemon   │   handshake → manifest → session → message
+      └─────┬─────┘
+            │ HTTP POST (JSON; optional NDJSON progress)
+            ▼
+      ┌───────────┐
+      │  backend  │   your model, your logic, your data
+      └───────────┘
+
+  No MCP? vireo-chat speaks vireo/1 to the daemon directly:
+
+  vireo-chat ──vireo/1 (TLS/QUIC, DNS SRV)──▶ vireo ──HTTP POST──▶ backend
+```
+
+| Component    | Repository                                                                | Runs on                       | Required?                  |
+| ------------ | ------------------------------------------------------------------------- | ----------------------------- | -------------------------- |
+| `vireo`      | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | the business's infrastructure | yes — it is the endpoint   |
+| `vireo-chat` | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | any operator's terminal       | optional — a direct client |
+| `fakeagent`  | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | a development machine         | optional — a stub backend  |
+| `vireo-mcp`  | [ground-creative/vireo-mcp](https://github.com/ground-creative/vireo-mcp) | the AI host                   | optional — an MCP adapter  |
+
+What follows from that split:
+
+- **The wire protocol is independent of MCP.** `vireo/1` is the contract between
+  a client and a daemon; MCP is only how an MCP-speaking host reaches it.
+- **MCP is one integration mechanism, not a requirement.** A runtime that can
+  speak `vireo/1` natively does not need `vireo-mcp` at all, and `vireo-chat` is
+  the proof: it connects to a daemon with no MCP anywhere in the path.
+- **The daemon needs no model, AI provider or API key.** It forwards a turn and
+  returns an answer; whether a model, a database or a person produced that
+  answer is invisible to it.
+- **The business controls the exposed agents.** It decides which agents exist,
+  what they say they do, and which backend answers each one.
+
+## Why DNS SRV, not a well-known URL
+
+Well-known URI discovery and DNS SRV discovery answer different questions, and
+the difference is worth being precise about.
+
+A well-known path provides a _predictable location_ for retrieving an agent
+description. Given a domain, a client knows exactly which URL to fetch. The
+document it retrieves is authoritative about the rest: it can advertise interface
+URLs that point at a different host or port, as A2A's Agent Card does. That is a
+document-retrieval convention, and it works well when a document is what you
+need.
+
+An SRV record provides _DNS-level service endpoint discovery_. It names the target
+host and port for a service at that domain, before any HTTP request exists. That
+matters when the agent endpoint is not the website — another host, another port,
+another protocol is a normal deployment, and SRV expresses it as a routing fact
+rather than as a pointer discovered after fetching a document. SIP (RFC 3263),
+XMPP, LDAP and Matrix use SRV for exactly this reason.
+
+The layers stay separate either way: DNS routes, TLS protects the connection, and
+the manifest arrives inside that connection — so the certificate at the SRV target
+has to cover the queried domain, which is the name the client sends as
+`ServerName`. TLS encrypts and integrity-protects the conversation with whichever
+peer completed the handshake; certificate-chain and hostname verification are what
+identify that peer as the intended endpoint, and what makes impersonation by an
+active attacker fail. That verification is not the default in the current clients
+(see
+[Certificate verification in the clients](#certificate-verification-in-the-clients)),
+so until it is enabled the manifest is protected in transit but its origin is not
+established.
 
 ## What a session looks like
 
@@ -85,14 +284,15 @@ command:
 
 `connect ziwa.ai` resolves through `_vireo._tcp.ziwa.ai`, lists what that business
 publishes today, and opens a session. From an AI host, the same host name through
-[vireo-mcp](#connecting-an-ai-vireo-mcp).
+[vireo-mcp](#connecting-ai-hosts-through-vireo-mcp).
 
 ## Install
 
-Two binaries come from this repository: `vireo`, the daemon, and `vireo-chat`, a
-terminal client. `fakeagent` is a stub backend used to test a webhook. The other
+Three binaries come from this repository: `vireo`, the daemon, `vireo-chat`, a
+terminal client, and `fakeagent`, a stub backend used to test a webhook. The other
 client, **`vireo-mcp`**, is the MCP bridge so an AI host does the talking — it
-lives in its own repository ([Connecting an AI](#connecting-an-ai-vireo-mcp)).
+lives in its own repository
+([Connecting AI hosts through Vireo MCP](#connecting-ai-hosts-through-vireo-mcp)).
 
 ```bash
 git clone https://github.com/ground-creative/vireo.git
@@ -136,6 +336,41 @@ In the client, `connect localhost:7777` lists the agents from `config/demo.yaml`
 and any message gets the stub's answer. `--config` is required; the daemon reads
 YAML only from `config/`. `fakeagent` stands in for your own backend and
 disappears the moment `transport` names a real service.
+
+### Certificate verification in the clients
+
+Both bundled clients default to `-insecure`, which sets `InsecureSkipVerify`: the
+TLS handshake still completes and the traffic is still encrypted, but any
+certificate is accepted. That is what makes `scripts/gen-certs.sh` and a local
+`localhost:7777` work out of the box, and it is a development setting, not a
+production one. With no certificate check, nothing binds the connection to the
+business being contacted, so an active attacker on the path can present its own
+certificate and the client cannot tell. Against a deployment whose certificate
+chains to a public CA, turn verification back on explicitly:
+
+```bash
+./vireo-chat -insecure=false connect agent.example.com
+```
+
+The MCP bridge takes the same flag, as an argument in the host's server config:
+
+```json
+{
+  "mcpServers": {
+    "vireo": { "command": "vireo-mcp", "args": ["-insecure=false"] }
+  }
+}
+```
+
+TLS 1.3 is negotiated either way. Encryption and integrity hold for whatever peer
+completed the handshake. Certificate-chain and hostname verification are what
+authenticate that peer as the intended endpoint and what defend against active
+man-in-the-middle attacks; with verification on, the certificate must satisfy the
+queried business-domain identity rules — in the current implementation, it must
+cover that name, which the client sends as `ServerName`. With verification off the
+connection is encrypted but the business's identity is not established. If one
+deployment needs an exception, implement custom verification or certificate
+pinning rather than falling back to accepting arbitrary certificates.
 
 ## Configuration
 
@@ -195,6 +430,13 @@ server:
 When a client exceeds the limit, the daemon returns error code `rate_limited`
 with a retry delay. Set `enabled: false` to disable.
 
+Per-agent overrides inherit missing fields from the global values. A field set to
+`0` counts as missing, so there is no way to express "zero requests" for one
+agent — lower the rate or disable limiting globally instead. Full behaviour is in
+[`docs/CONFIGURATION.md#rate_limit`](docs/CONFIGURATION.md#rate_limit).
+
+### `start_message`
+
 An agent with a `start_message` opens every conversation with that greeting:
 the client shows it as soon as the session exists, and the backend is told on
 the first turn that it was already said, so a model does not repeat it.
@@ -210,11 +452,22 @@ _vireo._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
 That record is the only way a domain resolves — there is no assumed port. An
 endpoint without a record has to be addressed as `host:port`.
 
-## Connecting an AI (`vireo-mcp`)
+`_vireo._tcp` is the current Vireo discovery convention, not an established
+industry standard. The implementation serves TCP/TLS and UDP/QUIC on the same
+port, and both are found through this one `_tcp` record; there is no separate
+`_udp` record today.
 
-An AI host speaks MCP, not `vireo/1`. The bridge between them is `vireo-mcp`,
-maintained in its own repository:
+## Connecting AI hosts through Vireo MCP
+
+An MCP-speaking AI host speaks MCP, not `vireo/1`. The bridge between them is
+`vireo-mcp`, maintained in its own repository:
 [`ground-creative/vireo-mcp`](https://github.com/ground-creative/vireo-mcp).
+
+It is optional. It is the shortest path for a host that already speaks MCP, and
+it is where MCP-specific concerns live — host configuration, stdio versus
+Streamable HTTP, persistent client identity, bearer tokens, tool descriptions,
+progress notifications and cancellation mapping. A runtime that speaks `vireo/1`
+directly, as `vireo-chat` does, never needs it.
 
 ```bash
 go install github.com/ground-creative/vireo-mcp@latest
@@ -244,7 +497,23 @@ Why the two installs differ: `vireo-mcp` is a single binary with no data files,
 so `go install` covers it. The daemon above is built in its own checkout because
 it reads `config/` and `certs/` and writes `sessions/` beside the binary.
 
-## Backend Webhook
+What the bridge exposes as MCP tools: `discover`, `connect`, `conversations`,
+`new_conversation`, `resume_conversation`, `send_message`, `close_conversation`
+and `about`. An assistant follows one path — `connect {host}` → choose an agent →
+`conversations` or `new_conversation` → `send_message`.
+
+The complete documentation for that side lives with the bridge:
+[`vireo-mcp`](https://github.com/ground-creative/vireo-mcp#readme). Notable
+differences the host user should know about:
+
+- identity differs by transport — a local identity file over stdio, a bearer
+  token bound to a client id over HTTP;
+- progress notifications reach the host over stdio only; over HTTP one POST
+  yields one response, so progress is silent;
+- host cancellation becomes a `cancel` frame on a best-effort basis, and it is
+  not a rollback.
+
+## Backend webhook integration
 
 Every turn is one HTTP POST to the agent's `transport`.
 
@@ -324,11 +593,21 @@ Turns run concurrently, so the read loop stays free while a call is in flight �
 that is what makes a cancel frame readable at all. Details and the frame layout
 are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md#cancelling-a-turn).
 
-## Documentation
+## Documentation and contributing
 
+- [`docs/PROPOSAL.md`](docs/PROPOSAL.md) — the open protocol initiative: the
+  deeper reasoning, protocol principles, open questions, and how to take part
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — frames, handshake, manifest, message
   and session payloads, webhook contract, error codes
 - [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — every key, defaults,
   inheritance, startup validation
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — build, Docker, certificates,
   install, firewall, DNS, systemd, operations
+- [`vireo-mcp`](https://github.com/ground-creative/vireo-mcp) — the MCP bridge,
+  its host setup, transports, identity and tokens
+
+The protocol is the part that needs other people. If you are building an AI
+runtime, a daemon in another language, or you run a business that wants its own
+agents reachable at its own domain, the place to start is
+[`docs/PROPOSAL.md`](docs/PROPOSAL.md). Independent implementations that
+interoperate are the only real measure of whether any of this works.
