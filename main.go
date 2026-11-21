@@ -619,10 +619,12 @@ func buildRegistry(cfg *config) (*upstream.Registry, protocol.Manifest, []string
 		Agents:   agents,
 		Commands: commands,
 		Refs:     cfg.Refs,
-		// A manifest is produced when the daemon starts, and is a promise about
-		// that moment, so it carries the moment (MAN-39, MAN-42).
-		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
-		Signature:   nil,
+		// No generated_at. The manifest is produced at startup and delivered
+		// inside the connection, so its freshness is the handshake itself
+		// (MAN-42). Stamping the start time made the digest change on every
+		// restart for an unchanged endpoint, which is exactly what MAN-54 tells
+		// a publisher not to do.
+		Signature: nil,
 	}
 	if d, err := manifest.ComputeDigest(); err == nil {
 		manifest.Digest = d

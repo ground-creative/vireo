@@ -155,6 +155,20 @@ one-for-one, so a config written before `links` existed produces the same
 information in both shapes. `refs` is still published so an older client keeps
 working.
 
+### Why both, and for how long
+
+`refs` and `links` carry the same fact in two shapes. `links` is the expressive
+one: it can say what a reference *is*, with a label and a media type, and it can
+grow. `refs` is a bare map and cannot grow.
+
+They are emitted together because a client written against `manifest_version`
+1.0 reads `refs`, and one written against 1.1 or later reads `links`. Publishing
+both means neither generation breaks during the deprecation window (`MAN-44`).
+The same applies to `commands` and `capabilities.session` (`MAN-45`).
+
+When both go: a MAJOR bump, and not before. `DECISIONS.md` D-5 in the
+specification records the reasoning.
+
 `links` may also be set per agent; endpoint-level and agent-level links are
 additive, not replacing.
 
@@ -194,7 +208,9 @@ The manifest is the public document; this config file is not. The mapping:
 | `session.ttl_seconds`              | `session.ttl_default`                                                      |
 | `commands` (deprecated)            | the enabled subset of the session operations                               |
 | `refs` (deprecated)                | `refs`                                                                     |
-| `generated_at`, `digest`           | computed at startup                                                        |
+| `digest`                           | computed at startup                                                        |
+| `generated_at`                     | not emitted — freshness is the handshake; see MAN-42 and MAN-54             |
+| `expires_at`                       | not emitted — nothing caches this document                                  |
 
 `session.list` controls **history browsing only**. Creating, reading and closing
 a session stay available, because a conversational agent is unusable without

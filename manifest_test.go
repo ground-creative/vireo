@@ -269,3 +269,23 @@ func TestStatelessAgentHasNoSessionBlock(t *testing.T) {
 		t.Errorf("session = %+v, want nil for a stateless agent", manifest.Agents[0].Session)
 	}
 }
+
+// MAN-54: an unchanged endpoint must produce an unchanged document, so the
+// digest stays meaningful across restarts. Stamping the startup time made it
+// change on every start for no reason.
+func TestManifestIsStableAcrossBuilds(t *testing.T) {
+	cfg := &config{
+		Transport: "http://127.0.0.1:8088/vireo/message",
+		Agents:    []agentConf{{Name: "orders", Tags: []string{"orders"}}},
+	}
+
+	_, first, _ := buildRegistry(cfg)
+	_, second, _ := buildRegistry(cfg)
+
+	if first.Digest != second.Digest {
+		t.Errorf("digest changed between identical builds: %q then %q", first.Digest, second.Digest)
+	}
+	if first.GeneratedAt != "" {
+		t.Errorf("generated_at = %q; it would make the digest unstable", first.GeneratedAt)
+	}
+}
