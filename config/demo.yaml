@@ -60,6 +60,7 @@ agents:
   - name: "orders"
     description: "Take food orders: pizzas, sides, drinks, pickup or delivery"
     sessions: true                      # holds multi-turn conversations
+    tags: ["orders", "delivery", "pickup"]
     links:
       - rel: "menu"
         href: "http://127.0.0.1:8088/menu"

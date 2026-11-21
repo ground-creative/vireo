@@ -158,16 +158,32 @@ working.
 `links` may also be set per agent; endpoint-level and agent-level links are
 additive, not replacing.
 
+## `tags`
+
+Free-form labels a caller can filter on without parsing prose. Optional, and
+purely advisory: a tag is a claim about topic, not a promise about behaviour, and
+an agent without tags is fully usable.
+
+```yaml
+agents:
+  - name: "sales-representative"
+    tags: ["sales", "consultation", "services"]
+```
+
+Each tag must match `^[a-z][a-z0-9._-]{0,63}$` and be unique within its agent.
+Prefer few, stable tags: renaming one breaks a client that filters on it.
+
 ## What the daemon publishes, and where it comes from
 
 The manifest is the public document; this config file is not. The mapping:
 
 | Manifest member                    | Source                                                                     |
 | ---------------------------------- | -------------------------------------------------------------------------- |
-| `manifest_version`                 | fixed by the daemon (`1.2`)                                                |
+| `manifest_version`                 | fixed by the daemon (`1.3`)                                                |
 | `protocol`                         | fixed (`vireo/1`)                                                          |
 | `endpoint`                         | `server.endpoint`                                                          |
 | `agents[]`                         | `agents[]` (skipped entries are reported at startup)                       |
+| `agents[].tags`                    | `agents[].tags`                                                            |
 | `agents[].links`                   | `agents[].links`, falling back to `agents[].refs`                          |
 | `agents[].session.ttl_seconds`     | the agent's effective `session.ttl`                                        |
 | `agents[].limits`                  | `server.rate_limit.agents.<name>`                                          |
@@ -221,6 +237,7 @@ Mint rules are validated at startup, so a contradictory `prefix` / `charset` /
 | `transport`     | string   | top-level       | this agent's webhook                                            |
 | `timeout`       | duration | `30s`           | per-message backend timeout                                     |
 | `start_message` | string   | —               | greeting returned at session creation                           |
+| `tags`          | list     | —               | free-form labels for selection                                 |
 | `links`         | list     | —               | references for this agent                                       |
 | `refs`          | map      | —               | deprecated; superseded by `links`                               |
 | `session`       | block    | inherits global | per-agent `ttl` and mint overrides                              |

@@ -28,7 +28,7 @@ const Version = "vireo/1"
 // independent of Version (the wire protocol) and of the spec release tag: a
 // MINOR bump is additive, and a client that does not know a member must ignore
 // it (MAN-1 .. MAN-5).
-const ManifestVersion = "1.2"
+const ManifestVersion = "1.3"
 
 // ManifestVersionFallback is what a manifest without manifest_version means: the
 // 1.0 shape, which carried refs and commands instead of links and capabilities
@@ -212,6 +212,7 @@ type AgentEntry struct {
 	ID           string            `json:"id,omitempty"`
 	Name         string            `json:"name"`
 	Description  string            `json:"description,omitempty"`
+	Tags         []string          `json:"tags,omitempty"`
 	Sessions     bool              `json:"sessions"`
 	StartMessage string            `json:"start_message,omitempty"`
 	Links        []Link            `json:"links,omitempty"`
@@ -263,6 +264,7 @@ type Manifest struct {
 var (
 	ManifestVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 	AgentNamePattern       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+	TagPattern             = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
 	LinkRelPattern         = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
 	// AbsoluteURIPattern requires a scheme, which is what MAN-19 means by
 	// "absolute": a relative path is not a published reference.
@@ -343,6 +345,16 @@ func (m Manifest) validate() error {
 		seen[a.Name] = true
 		if a.Sessions {
 			anySessions = true
+		}
+		tagSeen := make(map[string]bool, len(a.Tags))
+		for j, tag := range a.Tags {
+			if !TagPattern.MatchString(tag) {
+				return fmt.Errorf("agents[%d] %q: tags[%d] %q does not match %s (MAN-55)", i, a.Name, j, tag, TagPattern)
+			}
+			if tagSeen[tag] {
+				return fmt.Errorf("agents[%d] %q: duplicate tag %q (MAN-55)", i, a.Name, tag)
+			}
+			tagSeen[tag] = true
 		}
 		if err := validateLinks(fmt.Sprintf("agents[%d] %q", i, a.Name), a.Links); err != nil {
 			return err

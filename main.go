@@ -116,6 +116,7 @@ type agentSessionConf struct {
 type agentConf struct {
 	Name         string            `yaml:"name"`
 	Description  string            `yaml:"description"`
+	Tags         []string          `yaml:"tags"`
 	StartMessage string            `yaml:"start_message"`
 	Sessions     *bool             `yaml:"sessions"`
 	Transport    string            `yaml:"transport"`
@@ -543,6 +544,7 @@ func buildRegistry(cfg *config) (*upstream.Registry, protocol.Manifest, []string
 		entry := protocol.AgentEntry{
 			Name:         client.Name(),
 			Description:  client.Description(),
+			Tags:         a.Tags,
 			Sessions:     sessions,
 			StartMessage: client.StartMessage(),
 			Links:        linksFromConf(a.Links, a.Refs),

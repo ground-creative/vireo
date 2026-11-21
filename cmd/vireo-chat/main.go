@@ -369,6 +369,9 @@ func showAgent(c *conn) {
 	c.numbered = nil
 	fmt.Println()
 	fmt.Printf("%s — %s\n", entry.Name, entry.Description)
+	if len(entry.Tags) > 0 {
+		fmt.Printf("tags: %s\n", strings.Join(entry.Tags, ", "))
+	}
 	if len(entry.Links) > 0 {
 		fmt.Println("links:")
 		for _, l := range entry.Links {
