@@ -27,8 +27,8 @@ func TestBuildRegistryEmitsAConformingManifest(t *testing.T) {
 		t.Fatalf("warnings = %v, want none", warnings)
 	}
 
-	if manifest.ManifestVersion != "1.2" {
-		t.Errorf("manifest_version = %q, want 1.2", manifest.ManifestVersion)
+	if manifest.ManifestVersion != protocol.ManifestVersion {
+		t.Errorf("manifest_version = %q, want %q", manifest.ManifestVersion, protocol.ManifestVersion)
 	}
 	if err := manifest.Validate(); err != nil {
 		t.Errorf("manifest does not validate: %v", err)
