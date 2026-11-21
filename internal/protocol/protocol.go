@@ -8,6 +8,7 @@
 package protocol
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -386,8 +387,9 @@ func validateLinks(where string, links []Link) error {
 // ComputeDigest returns the MAN-40 digest: sha256 over the canonical JSON form
 // of the document with digest and signature removed. Canonicalisation here is
 // "marshal, decode into a generic value, marshal again", which sorts object
-// members; numbers re-encode through float64, so it is exact for the integers
-// this document uses.
+// members. HTML escaping is disabled so the bytes match RFC 8785 as MAN-40
+// requires: `<`, `>` and `&` stay literal, and any client canonicalising the
+// same document computes the same digest.
 func (m Manifest) ComputeDigest() (string, error) {
 	m.Digest = ""
 	m.Signature = nil
@@ -401,11 +403,13 @@ func (m Manifest) ComputeDigest() (string, error) {
 	}
 	delete(doc, "digest")
 	delete(doc, "signature")
-	canon, err := json.Marshal(doc)
-	if err != nil {
+	var canon bytes.Buffer
+	enc := json.NewEncoder(&canon)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(doc); err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(canon)
+	sum := sha256.Sum256(bytes.TrimRight(canon.Bytes(), "\n"))
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
