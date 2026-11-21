@@ -23,6 +23,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"gopkg.in/yaml.v3"
 
+	"vireo/internal/frame"
 	"vireo/internal/protocol"
 	"vireo/internal/server"
 	"vireo/internal/session"
@@ -34,7 +35,28 @@ type config struct {
 	Transport string            `yaml:"transport"`
 	Session   sessionConf       `yaml:"session"`
 	Refs      map[string]string `yaml:"refs"`
+	Links     []linkConf        `yaml:"links"`
 	Agents    []agentConf       `yaml:"agents"`
+}
+
+// linkConf is one published reference. It exists because refs (a map of key to
+// URL) cannot say what a link is: a client could not tell a menu PDF from an
+// OpenAPI document. refs is still read and still emitted for compatibility.
+type linkConf struct {
+	Rel         string `yaml:"rel"`
+	Href        string `yaml:"href"`
+	Label       string `yaml:"label"`
+	Type        string `yaml:"type"`
+	Description string `yaml:"description"`
+}
+
+// actionConf is something an agent claims it can do. Input and Output are
+// free-form hints to a caller, not schemas.
+type actionConf struct {
+	Name    string `yaml:"name"`
+	Summary string `yaml:"summary"`
+	Input   string `yaml:"input"`
+	Output  string `yaml:"output"`
 }
 
 // rateLimitConf is a pointer in serverConf, and Enabled is a pointer here, so
@@ -108,6 +130,8 @@ type agentConf struct {
 	Transport    string            `yaml:"transport"`
 	Timeout      string            `yaml:"timeout"`
 	Session      *agentSessionConf `yaml:"session"`
+	Actions      []actionConf      `yaml:"actions"`
+	Links        []linkConf        `yaml:"links"`
 	Refs         map[string]string `yaml:"refs"`
 }
 
@@ -526,13 +550,22 @@ func buildRegistry(cfg *config) (*upstream.Registry, protocol.Manifest, []string
 			warnings = append(warnings, fmt.Sprintf("agents[%d] %q: %v", i, name, err))
 			continue
 		}
-		agents = append(agents, protocol.AgentEntry{
+		entry := protocol.AgentEntry{
 			Name:         client.Name(),
 			Description:  client.Description(),
 			Sessions:     sessions,
 			StartMessage: client.StartMessage(),
+			Actions:      actionsFromConf(a.Actions),
+			Links:        linksFromConf(a.Links, a.Refs),
+			Limits:       manifestLimits(cfg.Server.RateLimit, name),
 			Refs:         a.Refs,
-		})
+		}
+		// Advertise this agent's effective session TTL: a per-agent override is
+		// real, and the endpoint default alone would misstate it (MAN-35).
+		if sessions {
+			entry.Session = &protocol.SessionPolicy{TTLSeconds: int(ttl / time.Second)}
+		}
+		agents = append(agents, entry)
 		log.Printf("agent ready: %s (via %s, sessions=%t, mint=%s)",
 			client.Name(), scheme(transport), sessions, mint.Rule())
 	}
@@ -542,28 +575,141 @@ func buildRegistry(cfg *config) (*upstream.Registry, protocol.Manifest, []string
 		endpoint.Name = agents[0].Name
 	}
 
-	var commands []string
-	if cfg.Session.List {
-		commands = append(commands,
-			protocol.SessionOpNew, protocol.SessionOpList,
-			protocol.SessionOpGet, protocol.SessionOpClose,
-			protocol.SessionOpPrune)
-		sort.Strings(commands)
+	// Session operations are advertised individually, so that disabling history
+	// browsing does not silently disable creation — the defect MAN-29 and
+	// PROTO-38 exist to prevent.
+	ops := &protocol.SessionOps{
+		New:   true,
+		Get:   true,
+		List:  cfg.Session.List,
+		Close: true,
+		Prune: cfg.Session.List,
 	}
+
+	// The deprecated commands list keeps its 1.0 shape, but now carries only the
+	// operations actually accepted (MAN-45).
+	var commands []string
+	if ops.New {
+		commands = append(commands, protocol.SessionOpNew)
+	}
+	if ops.Get {
+		commands = append(commands, protocol.SessionOpGet)
+	}
+	if ops.List {
+		commands = append(commands, protocol.SessionOpList)
+	}
+	if ops.Close {
+		commands = append(commands, protocol.SessionOpClose)
+	}
+	if ops.Prune {
+		commands = append(commands, protocol.SessionOpPrune)
+	}
+	sort.Strings(commands)
 
 	ttlSeconds := int(globalTTL / time.Second)
 	manifest := protocol.Manifest{
-		Protocol: protocol.Version,
-		Endpoint: endpoint,
-		Commands: commands,
-		Agents:   agents,
-		Refs:     cfg.Refs,
-		Session: protocol.SessionPolicy{
-			TTLSeconds: ttlSeconds,
-			List:       cfg.Session.List,
+		ManifestVersion: protocol.ManifestVersion,
+		Protocol:        protocol.Version,
+		Endpoint:        endpoint,
+		Links:           linksFromConf(cfg.Links, cfg.Refs),
+		Capabilities: &protocol.Capabilities{
+			Session:        ops,
+			Progress:       true,
+			Cancel:         true,
+			MaxTurnSeconds: int(callTimeout(cfg) / time.Second),
 		},
+		Limits:   manifestLimits(cfg.Server.RateLimit, ""),
+		Session:  protocol.SessionPolicy{TTLSeconds: ttlSeconds, List: cfg.Session.List},
+		Agents:   agents,
+		Commands: commands,
+		Refs:     cfg.Refs,
+		// A manifest is produced when the daemon starts, and is a promise about
+		// that moment, so it carries the moment (MAN-39, MAN-42).
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		Signature:   nil,
+	}
+	if d, err := manifest.ComputeDigest(); err == nil {
+		manifest.Digest = d
+	} else {
+		warnings = append(warnings, "manifest digest: "+err.Error())
+	}
+	// Fail loudly here rather than emitting a manifest a conforming client must
+	// reject (MAN-47, MAN-48).
+	if err := manifest.Validate(); err != nil {
+		warnings = append(warnings, "manifest does not validate: "+err.Error())
 	}
 	return registry, manifest, warnings
+}
+
+// linksFromConf turns the configured links into manifest links, falling back to
+// the deprecated refs map when no links were written. Existing configs keep
+// working, and a caller sees exactly one representation (MAN-44).
+func linksFromConf(links []linkConf, refs map[string]string) []protocol.Link {
+	if len(links) == 0 {
+		return protocol.LinksFromRefs(refs)
+	}
+	out := make([]protocol.Link, 0, len(links))
+	for _, l := range links {
+		out = append(out, protocol.Link{
+			Rel:         l.Rel,
+			Href:        l.Href,
+			Label:       l.Label,
+			Type:        l.Type,
+			Description: l.Description,
+		})
+	}
+	return out
+}
+
+func actionsFromConf(actions []actionConf) []protocol.Action {
+	if len(actions) == 0 {
+		return nil
+	}
+	out := make([]protocol.Action, 0, len(actions))
+	for _, a := range actions {
+		out = append(out, protocol.Action{
+			Name:    a.Name,
+			Summary: a.Summary,
+			Input:   a.Input,
+			Output:  a.Output,
+		})
+	}
+	return out
+}
+
+// manifestLimits builds the advertised limits for an agent from the same
+// rate_limit block the server enforces, so there is one source of truth. An
+// empty agent name means the endpoint-level defaults. Limiting that is off is
+// not advertised at all: silence means unknown, not unlimited (MAN-33).
+func manifestLimits(rl *rateLimitConf, agent string) *protocol.Limits {
+	if rl == nil || (rl.Enabled != nil && !*rl.Enabled) {
+		if agent != "" {
+			return nil
+		}
+		// Even with rate limiting off, the frame ceiling is a protocol fact, not
+		// a policy choice (MAN-31).
+		return &protocol.Limits{MaxMessageBytes: frame.MaxPayload}
+	}
+	rpm, burst := rl.RequestsPerMinute, rl.Burst
+	if o, ok := rl.Agents[agent]; ok && agent != "" {
+		if o.RequestsPerMinute > 0 {
+			rpm = o.RequestsPerMinute
+		}
+		if o.Burst > 0 {
+			burst = o.Burst
+		}
+	}
+	if rpm <= 0 {
+		rpm = 60
+	}
+	if burst <= 0 {
+		burst = 10
+	}
+	limits := &protocol.Limits{RequestsPerMinute: rpm, Burst: burst}
+	if agent == "" {
+		limits.MaxMessageBytes = frame.MaxPayload
+	}
+	return limits
 }
 
 func scheme(transport string) string {

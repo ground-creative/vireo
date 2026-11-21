@@ -558,14 +558,16 @@ func (c *connState) forward(stream uint32, client upstream.Client, req protocol.
 }
 
 // handleSession answers the daemon's own session operations.
+//
+// Operations are gated individually. Browsing history is optional; creating,
+// reading and closing a session is what talking to a conversational agent
+// requires, so those are available even when listing is off. Gating them
+// together made every sessions:true agent unreachable the moment an operator
+// set session.list: false — the defect MAN-29 and PROTO-38 exist to prevent.
 func (c *connState) handleSession(f frame.Frame) {
 	var req protocol.SessionRequest
 	if err := json.Unmarshal(f.Payload, &req); err != nil {
 		c.writeError(f.StreamID, protocol.CodeInvalidFrame, "malformed session payload: "+err.Error())
-		return
-	}
-	if !c.srv.cfg.ListSessions {
-		c.writeError(f.StreamID, protocol.CodeInvalidFrame, "session commands are disabled")
 		return
 	}
 
@@ -573,12 +575,20 @@ func (c *connState) handleSession(f frame.Frame) {
 	case protocol.SessionOpNew:
 		c.sessionNew(f.StreamID, req)
 	case protocol.SessionOpList:
+		if !c.srv.cfg.ListSessions {
+			c.writeError(f.StreamID, protocol.CodeInvalidFrame, "session.list is not enabled at this endpoint")
+			return
+		}
 		c.sessionList(f.StreamID, req)
 	case protocol.SessionOpGet:
 		c.sessionGet(f.StreamID, req)
 	case protocol.SessionOpClose:
 		c.sessionClose(f.StreamID, req)
 	case protocol.SessionOpPrune:
+		if !c.srv.cfg.ListSessions {
+			c.writeError(f.StreamID, protocol.CodeInvalidFrame, "session.prune is not enabled at this endpoint")
+			return
+		}
 		c.sessionPrune(f.StreamID, req)
 	default:
 		c.writeError(f.StreamID, protocol.CodeInvalidFrame, fmt.Sprintf("unknown session op %q", req.Op))

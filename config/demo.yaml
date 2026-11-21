@@ -29,7 +29,21 @@ server:
 # X-Vireo-Agent header. Override per agent only when it lives elsewhere.
 transport: "http://127.0.0.1:8088/vireo/message"
 
-# Static URLs a peer can follow. Advertised in the manifest under "refs".
+# Static references published in the manifest. `links` is the current shape: an
+# array, so each entry can say what it is. `refs` (a map of key to URL) still
+# works and is still emitted, but cannot carry a label or a media type.
+links:
+  - rel: "menu"
+    href: "http://127.0.0.1:8088/menu"
+    label: "Menu"
+    type: "text/html"
+  - rel: "docs"
+    href: "http://127.0.0.1:8088/wiki"
+    label: "Wiki"
+    type: "text/html"
+
+# Kept deliberately: it proves the compatibility path, and an older client
+# still reads what it always read.
 refs:
   menu: "http://127.0.0.1:8088/menu"
   docs: "http://127.0.0.1:8088/wiki"
@@ -46,8 +60,18 @@ agents:
   - name: "orders"
     description: "Take food orders: pizzas, sides, drinks, pickup or delivery"
     sessions: true                      # holds multi-turn conversations
-    refs:
-      menu: "http://127.0.0.1:8088/menu"
+    actions:                            # what this agent claims it can do
+      - name: "place_order"
+        summary: "Place a pickup or delivery order"
+        input: "items, and either pickup or a delivery address"
+      - name: "check_order"
+        summary: "Report the state of an existing order"
+        input: "an order reference"
+    links:
+      - rel: "menu"
+        href: "http://127.0.0.1:8088/menu"
+        label: "Menu"
+        type: "text/html"
 
   - name: "reservations"
     description: "Check availability, book a table and cancel a booking"

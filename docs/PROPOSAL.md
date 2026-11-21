@@ -1,5 +1,12 @@
 # An Open Protocol for Direct Agent-to-Business Communication
 
+> **Superseded.** The proposal now lives in the specification repository, where
+> it is versioned and can be argued with as its own artifact:
+> [`agent-front-door-spec/informative/PROPOSAL.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/informative/PROPOSAL.md).
+> That version states the front-door argument — why the web's door is built for a
+> reader and the wrong door for a caller — which this copy only gestures at. Kept
+> here for history; the specification version is the one to cite.
+
 **Status: Initial proposal — open for discussion and collaboration**
 
 This is not a wire specification and not a product announcement. It is a

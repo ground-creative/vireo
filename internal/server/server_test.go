@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,12 +50,23 @@ func (b *backend) last(t *testing.T) map[string]any {
 // start brings a daemon up on a loopback port and returns its address.
 func start(t *testing.T, registry *upstream.Registry) string {
 	t.Helper()
+	return startWith(t, registry, true)
+}
+
+// startWith is start with the history-listing switch under the caller's control.
+func startWith(t *testing.T, registry *upstream.Registry, listSessions bool) string {
+	t.Helper()
 	srv := New(Config{
-		TLS:          &tls.Config{NextProtos: []string{protocol.Version}},
-		Manifest:     protocol.Manifest{Protocol: protocol.Version},
+		TLS: &tls.Config{NextProtos: []string{protocol.Version}},
+		Manifest: protocol.Manifest{
+			ManifestVersion: protocol.ManifestVersion,
+			Protocol:        protocol.Version,
+			Endpoint:        protocol.Endpoint{Name: "test"},
+			Agents:          []protocol.AgentEntry{},
+		},
 		Registry:     registry,
 		Sessions:     session.NewMemory(),
-		ListSessions: true,
+		ListSessions: listSessions,
 		CallTimeout:  5 * time.Second,
 		Logger:       log.New(io.Discard, "", 0),
 	})
@@ -428,5 +440,67 @@ func TestGetLimiterAppliesAgentOverride(t *testing.T) {
 	}
 	if other := s.getLimiter(clientID, "orders"); other.burst != 10 {
 		t.Errorf("orders burst = %d, want the global 10", other.burst)
+	}
+}
+
+// session.list controls history browsing only. A conversational agent must
+// still be able to open, read and close a conversation when listing is off,
+// or turning off browsing would make every sessions:true agent unreachable
+// (MAN-29, PROTO-38).
+func TestConversationalAgentWorksWhenListingIsDisabled(t *testing.T) {
+	be := &backend{}
+	registry := upstream.NewRegistry()
+	agent, err := upstream.New(upstream.Spec{
+		Name:      "orders",
+		Transport: be.serve(t),
+		Sessions:  true,
+	})
+	if err != nil {
+		t.Fatalf("upstream.New: %v", err)
+	}
+	if err := registry.Add(agent); err != nil {
+		t.Fatalf("registry.Add: %v", err)
+	}
+
+	conn, rd := dial(t, startWith(t, registry, false))
+
+	write(t, conn, protocol.TypeSession, 2, protocol.SessionRequest{
+		Op:    protocol.SessionOpNew,
+		Agent: "orders",
+	})
+	var started protocol.NewSessionResponse
+	if err := json.Unmarshal(data(t, rd), &started); err != nil {
+		t.Fatalf("session.new failed while listing is disabled: %v", err)
+	}
+	if started.Session.ID == "" {
+		t.Fatal("session.new returned no id")
+	}
+
+	// A turn still works.
+	write(t, conn, protocol.TypeMessage, 3, protocol.MessageRequest{
+		Agent:     "orders",
+		SessionID: started.Session.ID,
+		Message:   "hello",
+	})
+	_ = data(t, rd)
+
+	// Browsing is what is refused, and it names the operation.
+	write(t, conn, protocol.TypeSession, 4, protocol.SessionRequest{
+		Op:    protocol.SessionOpList,
+		Agent: "orders",
+	})
+	f := read(t, rd)
+	if f.Type != protocol.TypeError {
+		t.Fatalf("session.list while disabled answered %s, want error", protocol.TypeName(f.Type))
+	}
+	var e protocol.ErrorPayload
+	if err := json.Unmarshal(f.Payload, &e); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+	if e.Code != protocol.CodeInvalidFrame {
+		t.Errorf("code = %q, want %q", e.Code, protocol.CodeInvalidFrame)
+	}
+	if !strings.Contains(e.Message, "session.list") {
+		t.Errorf("message %q does not name the refused operation", e.Message)
 	}
 }

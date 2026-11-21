@@ -9,17 +9,30 @@ package protocol
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"time"
 )
 
 // Version is the ALPN identifier and the protocol string carried in negotiate
 // and manifest frames.
 const Version = "vireo/1"
+
+// ManifestVersion is the manifest compatibility level this daemon emits. It is
+// independent of Version (the wire protocol) and of the spec release tag: a
+// MINOR bump is additive, and a client that does not know a member must ignore
+// it (MAN-1 .. MAN-5).
+const ManifestVersion = "1.1"
+
+// ManifestVersionFallback is what a manifest without manifest_version means: the
+// 1.0 shape, which carried refs and commands instead of links and capabilities
+// (MAN-53).
+const ManifestVersionFallback = "1.0"
 
 // Frame types.
 const (
@@ -152,32 +165,273 @@ type Endpoint struct {
 	Description string `json:"description,omitempty"`
 }
 
-// AgentEntry is one conversational agent behind the endpoint. Sessions says
-// whether the agent holds multi-turn conversations; a stateless agent answers
-// single messages and records nothing.
+// Link is a published reference: a URI plus what it is. It replaces the
+// deprecated refs map, which could carry only a key and a URL and so could not
+// tell a menu PDF from an OpenAPI document (MAN-19 .. MAN-23).
+type Link struct {
+	Rel         string `json:"rel"`
+	Href        string `json:"href"`
+	Label       string `json:"label,omitempty"`
+	Type        string `json:"type,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// Action is something an agent claims it can do. Input and Output are
+// free-form hints, not schemas: a client must not reject a reply because it
+// does not match them (MAN-24 .. MAN-27).
+type Action struct {
+	Name    string `json:"name"`
+	Summary string `json:"summary"`
+	Input   string `json:"input,omitempty"`
+	Output  string `json:"output,omitempty"`
+}
+
+// SessionOps says which session operations the endpoint accepts. A capability
+// advertised as true MUST be accepted; false or absent MUST be rejected with a
+// documented error rather than silently ignored (MAN-28, MAN-52).
+type SessionOps struct {
+	New   bool `json:"new"`
+	Get   bool `json:"get"`
+	List  bool `json:"list"`
+	Close bool `json:"close"`
+	Prune bool `json:"prune"`
+}
+
+// Capabilities is what the endpoint implements beyond the protocol minimum.
+type Capabilities struct {
+	Session        *SessionOps `json:"session,omitempty"`
+	Progress       bool        `json:"progress,omitempty"`
+	Cancel         bool        `json:"cancel,omitempty"`
+	MaxTurnSeconds int         `json:"max_turn_seconds,omitempty"`
+}
+
+// Limits are advertised operational limits. They describe intent, not a
+// guarantee: a client must still handle rate_limited (MAN-31 .. MAN-34).
+type Limits struct {
+	MaxMessageBytes   int `json:"max_message_bytes,omitempty"`
+	RequestsPerMinute int `json:"requests_per_minute,omitempty"`
+	Burst             int `json:"burst,omitempty"`
+	MaxTurns          int `json:"max_turns,omitempty"`
+}
+
+// AgentEntry is one agent behind the endpoint. Sessions says whether the agent
+// holds multi-turn conversations; a stateless agent answers single messages and
+// records nothing.
 type AgentEntry struct {
+	ID           string            `json:"id,omitempty"`
 	Name         string            `json:"name"`
 	Description  string            `json:"description,omitempty"`
 	Sessions     bool              `json:"sessions"`
 	StartMessage string            `json:"start_message,omitempty"`
+	Actions      []Action          `json:"actions,omitempty"`
+	Links        []Link            `json:"links,omitempty"`
+	Limits       *Limits           `json:"limits,omitempty"`
+	Session      *SessionPolicy    `json:"session,omitempty"`
 	Refs         map[string]string `json:"refs,omitempty"`
 }
 
 // SessionPolicy is the session contract advertised to callers. The id format
 // is deliberately absent: the server mints ids; callers receive and echo them.
+// List is the 1.0 shape and is retained for compatibility only; the
+// authoritative statement of which operations are available is
+// Capabilities.Session (MAN-45).
 type SessionPolicy struct {
 	TTLSeconds int  `json:"ttl_seconds,omitempty"`
-	List       bool `json:"list_enabled"`
+	List       bool `json:"list_enabled,omitempty"`
 }
 
-// Manifest is the daemon's answer to a negotiate frame.
+// Signature is reserved: in manifest_version 1.1 a publisher emits null and a
+// client ignores any object it does not understand (MAN-41).
+type Signature struct{}
+
+// Manifest is the daemon's answer to a negotiate frame: the front door a caller
+// reads before it says anything.
 type Manifest struct {
-	Protocol string            `json:"protocol"`
-	Endpoint Endpoint          `json:"endpoint"`
+	ManifestVersion string        `json:"manifest_version"`
+	Protocol        string        `json:"protocol"`
+	Endpoint        Endpoint      `json:"endpoint"`
+	Links           []Link        `json:"links,omitempty"`
+	Capabilities    *Capabilities `json:"capabilities,omitempty"`
+	Limits          *Limits       `json:"limits,omitempty"`
+	Session         SessionPolicy `json:"session"`
+	Agents          []AgentEntry  `json:"agents"`
+
+	// Deprecated members, emitted for one minor release alongside their
+	// replacement (MAN-44, MAN-45).
 	Commands []string          `json:"commands,omitempty"`
-	Agents   []AgentEntry      `json:"agents"`
 	Refs     map[string]string `json:"refs,omitempty"`
-	Session  SessionPolicy     `json:"session"`
+
+	// Freshness and integrity (MAN-39 .. MAN-43). Digest is sha256 over the
+	// canonical document with digest and signature removed.
+	GeneratedAt string     `json:"generated_at,omitempty"`
+	ExpiresAt   string     `json:"expires_at,omitempty"`
+	Digest      string     `json:"digest,omitempty"`
+	Signature   *Signature `json:"signature"`
+}
+
+// Validation patterns from MANIFEST.md.
+var (
+	ManifestVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
+	AgentNamePattern       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+	ActionNamePattern      = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+	LinkRelPattern         = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
+	// AbsoluteURIPattern requires a scheme, which is what MAN-19 means by
+	// "absolute": a relative path is not a published reference.
+	AbsoluteURIPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.\-]*:`)
+	DigestPattern      = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+)
+
+// LinksFromRefs converts the deprecated refs map into the equivalent links, so
+// that a caller never has to choose between two ways of saying the same thing
+// (MAN-44). Keys are sorted for a stable digest.
+func LinksFromRefs(refs map[string]string) []Link {
+	if len(refs) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(refs))
+	for k := range refs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]Link, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, Link{Rel: k, Href: refs[k]})
+	}
+	return out
+}
+
+// Normalize fills the defaults a client is allowed to assume. The only such
+// default in 1.1 is the manifest version: a document with no manifest_version is
+// a 1.0 document, not an invalid one (MAN-53).
+func (m Manifest) Normalize() Manifest {
+	if m.ManifestVersion == "" {
+		m.ManifestVersion = ManifestVersionFallback
+	}
+	return m
+}
+
+// Validate checks the document a publisher MUST emit (MAN-1 .. MAN-54). It is
+// the strict form: a publisher that fails this is emitting something a
+// conforming client will reject.
+func (m Manifest) Validate() error {
+	if m.ManifestVersion == "" {
+		return errors.New("manifest_version is required (MAN-1)")
+	}
+	return m.validate()
+}
+
+// ValidateAsClient checks the minimum a client MUST enforce before it acts on
+// anything, tolerating a 1.0 document (MAN-47 .. MAN-49, MAN-53).
+func (m Manifest) ValidateAsClient() error {
+	return m.Normalize().validate()
+}
+
+func (m Manifest) validate() error {
+	if !ManifestVersionPattern.MatchString(m.ManifestVersion) {
+		return fmt.Errorf("manifest_version %q is not MAJOR.MINOR (MAN-1)", m.ManifestVersion)
+	}
+	if m.Protocol == "" {
+		return errors.New("protocol is required")
+	}
+	if m.Endpoint.Name == "" {
+		return errors.New("endpoint.name is required")
+	}
+	if m.Agents == nil {
+		return errors.New("agents is required and may be empty (MAN-7)")
+	}
+	seen := make(map[string]bool, len(m.Agents))
+	anySessions := false
+	for i, a := range m.Agents {
+		if a.Name == "" {
+			return fmt.Errorf("agents[%d]: name is required", i)
+		}
+		if !AgentNamePattern.MatchString(a.Name) {
+			return fmt.Errorf("agents[%d] %q: name does not match %s (MAN-12)", i, a.Name, AgentNamePattern)
+		}
+		if seen[a.Name] {
+			return fmt.Errorf("agents[%d] %q: duplicate name (MAN-12)", i, a.Name)
+		}
+		seen[a.Name] = true
+		if a.Sessions {
+			anySessions = true
+		}
+		actSeen := make(map[string]bool, len(a.Actions))
+		for j, act := range a.Actions {
+			if !ActionNamePattern.MatchString(act.Name) {
+				return fmt.Errorf("agents[%d] %q: actions[%d] %q does not match %s (MAN-24)", i, a.Name, j, act.Name, ActionNamePattern)
+			}
+			if act.Summary == "" {
+				return fmt.Errorf("agents[%d] %q: actions[%d] %q: summary is required", i, a.Name, j, act.Name)
+			}
+			if actSeen[act.Name] {
+				return fmt.Errorf("agents[%d] %q: duplicate action %q (MAN-24)", i, a.Name, act.Name)
+			}
+			actSeen[act.Name] = true
+		}
+		if err := validateLinks(fmt.Sprintf("agents[%d] %q", i, a.Name), a.Links); err != nil {
+			return err
+		}
+		if a.Session != nil && a.Session.TTLSeconds < 0 {
+			return fmt.Errorf("agents[%d] %q: session.ttl_seconds must be positive (MAN-37)", i, a.Name)
+		}
+	}
+	if err := validateLinks("links", m.Links); err != nil {
+		return err
+	}
+	if m.Session.TTLSeconds < 0 {
+		return errors.New("session.ttl_seconds must be positive (MAN-37)")
+	}
+	if m.Digest != "" && !DigestPattern.MatchString(m.Digest) {
+		return fmt.Errorf("digest %q is not sha256:<64 hex> (MAN-40)", m.Digest)
+	}
+	// A capability advertised as true must be honoured; the one contradiction a
+	// manifest can state on its own is "no session creation" while an agent
+	// declares sessions (MAN-29).
+	if anySessions && m.Capabilities != nil && m.Capabilities.Session != nil && !m.Capabilities.Session.New {
+		return errors.New("capabilities.session.new is false but an agent declares sessions (MAN-29)")
+	}
+	return nil
+}
+
+func validateLinks(where string, links []Link) error {
+	for i, l := range links {
+		if !LinkRelPattern.MatchString(l.Rel) {
+			return fmt.Errorf("%s: links[%d] %q: rel does not match %s (MAN-20)", where, i, l.Rel, LinkRelPattern)
+		}
+		if l.Href == "" {
+			return fmt.Errorf("%s: links[%d] %q: href is required (MAN-19)", where, i, l.Rel)
+		}
+		if !AbsoluteURIPattern.MatchString(l.Href) {
+			return fmt.Errorf("%s: links[%d] %q: href %q is not an absolute URI (MAN-19)", where, i, l.Rel, l.Href)
+		}
+	}
+	return nil
+}
+
+// ComputeDigest returns the MAN-40 digest: sha256 over the canonical JSON form
+// of the document with digest and signature removed. Canonicalisation here is
+// "marshal, decode into a generic value, marshal again", which sorts object
+// members; numbers re-encode through float64, so it is exact for the integers
+// this document uses.
+func (m Manifest) ComputeDigest() (string, error) {
+	m.Digest = ""
+	m.Signature = nil
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return "", err
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return "", err
+	}
+	delete(doc, "digest")
+	delete(doc, "signature")
+	canon, err := json.Marshal(doc)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(canon)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
 // MessageRequest is one turn of conversation. Agent names the agent to talk

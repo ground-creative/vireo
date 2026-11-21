@@ -1,5 +1,13 @@
 # vireo wire protocol
 
+> **Superseded.** The normative protocol specification now lives in the
+> Agent Front Door specification repository:
+> [`agent-front-door-spec/normative/PROTOCOL.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/normative/PROTOCOL.md).
+> That document assigns a requirement ID (`PROTO-n`, `WH-n`) to every rule and is
+> written so an implementation in any language can follow it without reading this
+> codebase. This copy is kept as the implementation's own notes; when the two
+> disagree, the specification wins.
+
 One port serves both transports:
 
 - **TCP + TLS 1.3** and **UDP + QUIC**, same port (default `7777`)

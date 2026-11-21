@@ -102,7 +102,10 @@ AI model or agent framework needs to be involved on either side.
 The current `vireo/1` protocol implements a concrete subset of this — framing,
 handshake, manifest, sessions, messages, a webhook contract, progress and
 cancellation — and is specified frame by frame in
-[`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+[`docs/PROTOCOL.md`](docs/PROTOCOL.md). The manifest object it serves is
+specified separately and transport-independently in the
+[Agent Front Door specification](https://github.com/ground-creative/agent-front-door-spec/blob/main/normative/MANIFEST.md);
+that document, not this README, is the contract a client should implement.
 
 ## The open protocol initiative
 
@@ -124,10 +127,11 @@ standard; it is the starting point we can experiment with today.
 
 A single Go binary per domain. It listens on one port with TLS 1.3 and QUIC, is
 found through the current Vireo discovery convention, a DNS SRV record at
-`_vireo._tcp.<domain>`, and serves a runtime manifest: the agents that domain
-exposes, plus the references it publishes alongside them — a site, docs, a wiki,
-a status page. Every turn then goes to one HTTP webhook. No model, no API key,
-no per-vendor client code.
+`_vireo._tcp.<domain>`, and serves the manifest: the agents that domain exposes,
+what each one claims it can do, and the references it publishes alongside them —
+a site, docs, a wiki, a status page. The manifest is built from configuration at
+startup, not on every connection. Every turn then goes to one HTTP webhook. No
+model, no API key, no per-vendor client code.
 
 It was built by asking an AI to design the protocol it would use itself.
 
@@ -139,7 +143,8 @@ It does:
   `vireo/1`;
 - answer discovery for a domain through the single `_vireo._tcp` SRV record,
   with no assumed port;
-- publish a runtime manifest of agents, session commands and static `refs`;
+- publish a manifest of agents, their actions and published links, plus the
+  session operations it accepts;
 - hold session envelopes and forward every turn to one HTTP webhook;
 - relay progress lines and cancellation between the caller and that webhook.
 
@@ -327,9 +332,9 @@ Three processes, three terminals, no model anywhere — the local run is the
 quickest proof the build works:
 
 ```bash
-./fakeagent            # 1. stub backend on :8088
-./vireo --config demo  # 2. daemon, TLS + QUIC on :7777
-./vireo-chat           # 3. client, in another terminal
+./fakeagent                    # 1. stub backend on :8088
+./vireo --config demo          # 2. daemon, TLS + QUIC on :7777
+./vireo-chat -insecure         # 3. client, in another terminal
 ```
 
 In the client, `connect localhost:7777` lists the agents from `config/demo.yaml`
@@ -337,21 +342,27 @@ and any message gets the stub's answer. `--config` is required; the daemon reads
 YAML only from `config/`. `fakeagent` stands in for your own backend and
 disappears the moment `transport` names a real service.
 
+The `-insecure` flag is needed locally because the certificate from
+`scripts/gen-certs.sh` is not issued by a public CA. It is a development
+setting, it prints a warning when used, and it is not the default.
+
 ### Certificate verification in the clients
 
-Both current clients (`vireo-chat` and `vireo-mcp`) default to `-insecure`, which
-sets `InsecureSkipVerify`: the TLS handshake still completes and the traffic is
-still encrypted, but any certificate is accepted. The two are maintained in
-separate repositories: `vireo-chat` here, `vireo-mcp` in its own. That is what
-makes `scripts/gen-certs.sh` and a local `localhost:7777` work out of the box,
-and it is a development setting, not a production one. With no certificate check,
-nothing binds the connection to the business being contacted, so an active
-attacker on the path can present its own certificate and the client cannot tell.
-Against a deployment whose certificate chains to a public CA, turn verification
-back on explicitly:
+Both clients (`vireo-chat` and `vireo-mcp`) **verify the server certificate by
+default**. That is what binds the connection to the business being contacted:
+the certificate must cover the queried domain, which the client sends as
+`ServerName`. Without verification the traffic is still encrypted and
+integrity-protected, but only for *whichever peer completed the handshake* — an
+active attacker on the path can present its own certificate and the client
+cannot tell, so the manifest's origin is not established.
+
+Local development uses a certificate from `scripts/gen-certs.sh` that no public
+CA chains to, so the handshake fails with an explanation and the flag to skip
+verification is named in the error. Skipping is opt-in and loud:
 
 ```bash
-./vireo-chat -insecure=false connect agent.example.com
+./vireo-chat -insecure connect localhost:7777
+# warning: -insecure disables certificate verification; the endpoint's identity is not established
 ```
 
 The MCP bridge takes the same flag, as an argument in the host's server config:
@@ -359,20 +370,16 @@ The MCP bridge takes the same flag, as an argument in the host's server config:
 ```json
 {
   "mcpServers": {
-    "vireo": { "command": "vireo-mcp", "args": ["-insecure=false"] }
+    "vireo": { "command": "vireo-mcp", "args": ["-insecure"] }
   }
 }
 ```
 
-TLS 1.3 is negotiated either way. Encryption and integrity hold for whatever peer
-completed the handshake. Certificate-chain and hostname verification are what
-authenticate that peer as the intended endpoint and what defend against active
-man-in-the-middle attacks; with verification on, the certificate must satisfy the
-queried business-domain identity rules — in the current implementation, it must
-cover that name, which the client sends as `ServerName`. With verification off the
-connection is encrypted but the business's identity is not established. If one
-deployment needs an exception, implement custom verification or certificate
-pinning rather than falling back to accepting arbitrary certificates.
+A deployment with a certificate that chains to a public CA needs no flag at all.
+If one deployment needs an exception, implement custom verification or
+certificate pinning rather than falling back to accepting arbitrary
+certificates. The normative rules are `SEC-6` and `SEC-7` in
+[`agent-front-door-spec/normative/SECURITY.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/normative/SECURITY.md).
 
 ## Configuration
 
@@ -597,14 +604,16 @@ are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md#cancelling-a-turn).
 
 ## Documentation and contributing
 
-- [`docs/PROPOSAL.md`](docs/PROPOSAL.md) — the open protocol initiative: the
-  deeper reasoning, protocol principles, open questions, and how to take part
-- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — frames, handshake, manifest, message
-  and session payloads, webhook contract, error codes
-- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — every key, defaults,
-  inheritance, startup validation
+- [`agent-front-door-spec`](https://github.com/ground-creative/agent-front-door-spec) —
+  **the specification**: the manifest object, the wire protocol, conformance levels,
+  security considerations, schema and fixtures. Start here if you want to
+  implement something; it is written to be followed without reading this code.
+- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — every key of this daemon,
+  defaults, inheritance, startup validation, and how config maps to the manifest
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — build, Docker, certificates,
   install, firewall, DNS, systemd, operations
+- [`docs/PROPOSAL.md`](docs/PROPOSAL.md) and [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
+  — superseded copies of the proposal and protocol, kept for history
 - [`vireo-mcp`](https://github.com/ground-creative/vireo-mcp) — the MCP bridge,
   its host setup, transports, identity and tokens
 

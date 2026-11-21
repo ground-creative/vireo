@@ -122,11 +122,93 @@ Default webhook for every agent: `https://host/path`. An agent may override it
 with its own `transport`. An agent with no transport anywhere is skipped at
 startup with a warning.
 
-## `refs`
+## `refs` (deprecated) and `links`
 
-A map of static URLs published in the manifest, at the endpoint level and per
-agent. Any keys you like — a menu, docs, a status page. A peer receives them in
-the manifest and can follow them without asking you.
+`refs` is a map of key to URL and is **deprecated**. `links` is an array of
+objects and is what an agent should publish: each entry can say what it is,
+which a map cannot.
+
+```yaml
+links:
+  - rel: "menu"
+    href: "https://example.com/menu"
+    label: "Menu"
+    type: "text/html"
+  - rel: "openapi"
+    href: "https://example.com/api.json"
+    type: "application/json"
+```
+
+| Key | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `rel` | string | yes | machine key: `site`, `docs`, `api`, `openapi`, `menu`, `pricing`, `status`, `terms` … |
+| `href` | string | yes | absolute URI |
+| `label` | string | no | human label |
+| `type` | string | no | media type, if known |
+| `description` | string | no | one sentence |
+
+`rel` must match `^[a-z][a-z0-9._-]{0,63}$`. Unknown `rel` values are legal — a
+caller must tolerate them.
+
+Both are emitted. When `links` is absent, the daemon derives links from `refs`
+one-for-one, so a config written before `links` existed produces the same
+information in both shapes. `refs` is still published so an older client keeps
+working.
+
+`links` may also be set per agent; endpoint-level and agent-level links are
+additive, not replacing.
+
+## `actions`
+
+What an agent claims it can do. Optional, and a hint for routing rather than a
+whitelist: an agent without `actions` is fully usable.
+
+```yaml
+agents:
+  - name: "orders"
+    actions:
+      - name: "place_order"
+        summary: "Place a pickup or delivery order"
+        input: "items, and either pickup or a delivery address"
+```
+
+| Key | Type | Required | Meaning |
+| --- | --- | --- | --- |
+| `name` | string | yes | `^[a-z][a-z0-9_]{0,63}$`, unique within the agent |
+| `summary` | string | yes | one sentence |
+| `input` | string | no | free-form hint, not a schema |
+| `output` | string | no | free-form hint, not a schema |
+
+A published action is a promise: do not list one the backend cannot honour.
+
+## What the daemon publishes, and where it comes from
+
+The manifest is the public document; this config file is not. The mapping:
+
+| Manifest member | Source |
+| --- | --- |
+| `manifest_version` | fixed by the daemon (`1.1`) |
+| `protocol` | fixed (`vireo/1`) |
+| `endpoint` | `server.endpoint` |
+| `agents[]` | `agents[]` (skipped entries are reported at startup) |
+| `agents[].actions` | `agents[].actions` |
+| `agents[].links` | `agents[].links`, falling back to `agents[].refs` |
+| `agents[].session.ttl_seconds` | the agent's effective `session.ttl` |
+| `agents[].limits` | `server.rate_limit.agents.<name>` |
+| `links` | `links`, falling back to `refs` |
+| `capabilities.session` | derived: `new`/`get`/`close` always on, `list`/`prune` from `session.list` |
+| `capabilities.progress`, `.cancel` | always on for this daemon |
+| `limits` | `server.rate_limit` (not advertised when limiting is off) |
+| `session.ttl_seconds` | `session.ttl_default` |
+| `commands` (deprecated) | the enabled subset of the session operations |
+| `refs` (deprecated) | `refs` |
+| `generated_at`, `digest` | computed at startup |
+
+`session.list` controls **history browsing only**. Creating, reading and closing
+a session stay available, because a conversational agent is unusable without
+them. Setting `list: false` therefore does not make `sessions: true` agents
+unreachable, and the manifest's `capabilities.session` reports exactly what the
+daemon accepts.
 
 ## `session`
 
@@ -163,7 +245,9 @@ Mint rules are validated at startup, so a contradictory `prefix` / `charset` /
 | `transport`     | string   | top-level       | this agent's webhook                                            |
 | `timeout`       | duration | `30s`           | per-message backend timeout                                     |
 | `start_message` | string   | —               | greeting returned at session creation                           |
-| `refs`          | map      | —               | static URLs for this agent                                      |
+| `actions`       | list     | —               | what the agent claims it can do                                 |
+| `links`         | list     | —               | references for this agent                                       |
+| `refs`          | map      | —               | deprecated; superseded by `links`                              |
 | `session`       | block    | inherits global | per-agent `ttl` and mint overrides                              |
 
 A conversational agent (`sessions: true`) requires a session id on every

@@ -37,11 +37,18 @@ type conn struct {
 
 func main() {
 	proto := flag.String("proto", "tls", "transport: tls or quic")
-	insecure := flag.Bool("insecure", true, "skip certificate verification (dev only)")
+	insecure := flag.Bool("insecure", false, "skip certificate verification (UNSAFE; local development only)")
 	idFlag := flag.String("id", "", "client id override (default: generated once and stored in the config dir)")
 	name := flag.String("name", "vireo-chat", "human-readable client name")
 	timeout := flag.Duration("timeout", 120*time.Second, "per-request timeout; a model-backed agent can take a minute or more")
 	flag.Parse()
+
+	// Verification is on by default: with it off the traffic is still encrypted,
+	// but nothing binds the connection to the business being contacted, so an
+	// active attacker on the path can impersonate the endpoint (SEC-6).
+	if *insecure {
+		fmt.Println("warning: -insecure disables certificate verification; the endpoint's identity is not established")
+	}
 
 	// The host may be given directly ("vireo-chat localhost:7777") or after
 	// the word "connect" ("vireo-chat connect localhost"), matching the
@@ -333,6 +340,20 @@ func showEndpoint(c *conn) {
 		}
 	}
 
+	// links is the 1.1 shape and says what each reference is; refs is the
+	// deprecated map and is shown only when a daemon still sends it alone.
+	if links := c.Manifest().Links; len(links) > 0 && len(c.Manifest().Refs) == 0 {
+		fmt.Println()
+		fmt.Println("references:")
+		for _, l := range links {
+			label := l.Label
+			if label == "" {
+				label = l.Rel
+			}
+			fmt.Printf("  %-10s %s\n", label, l.Href)
+		}
+	}
+
 	fmt.Println()
 	if len(rows) > 0 {
 		fmt.Println("type an agent number or name, or a conversation id to resume — help")
@@ -348,6 +369,22 @@ func showAgent(c *conn) {
 	c.numbered = nil
 	fmt.Println()
 	fmt.Printf("%s — %s\n", entry.Name, entry.Description)
+	if len(entry.Actions) > 0 {
+		fmt.Println("can:")
+		for _, a := range entry.Actions {
+			fmt.Printf("  %-18s %s\n", a.Name, a.Summary)
+		}
+	}
+	if len(entry.Links) > 0 {
+		fmt.Println("links:")
+		for _, l := range entry.Links {
+			label := l.Label
+			if label == "" {
+				label = l.Rel
+			}
+			fmt.Printf("  %-10s %s\n", label, l.Href)
+		}
+	}
 	if !entry.Sessions {
 		fmt.Println("this agent answers single messages; no conversation needed")
 		fmt.Println()
