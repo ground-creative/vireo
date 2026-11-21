@@ -352,7 +352,7 @@ Both clients (`vireo-chat` and `vireo-mcp`) **verify the server certificate by
 default**. That is what binds the connection to the business being contacted:
 the certificate must cover the queried domain, which the client sends as
 `ServerName`. Without verification the traffic is still encrypted and
-integrity-protected, but only for *whichever peer completed the handshake* — an
+integrity-protected, but only for _whichever peer completed the handshake_ — an
 active attacker on the path can present its own certificate and the client
 cannot tell, so the manifest's origin is not established.
 

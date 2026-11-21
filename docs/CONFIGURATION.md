@@ -139,13 +139,13 @@ links:
     type: "application/json"
 ```
 
-| Key | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `rel` | string | yes | machine key: `site`, `docs`, `api`, `openapi`, `menu`, `pricing`, `status`, `terms` … |
-| `href` | string | yes | absolute URI |
-| `label` | string | no | human label |
-| `type` | string | no | media type, if known |
-| `description` | string | no | one sentence |
+| Key           | Type   | Required | Meaning                                                                               |
+| ------------- | ------ | -------- | ------------------------------------------------------------------------------------- |
+| `rel`         | string | yes      | machine key: `site`, `docs`, `api`, `openapi`, `menu`, `pricing`, `status`, `terms` … |
+| `href`        | string | yes      | absolute URI                                                                          |
+| `label`       | string | no       | human label                                                                           |
+| `type`        | string | no       | media type, if known                                                                  |
+| `description` | string | no       | one sentence                                                                          |
 
 `rel` must match `^[a-z][a-z0-9._-]{0,63}$`. Unknown `rel` values are legal — a
 caller must tolerate them.
@@ -172,12 +172,12 @@ agents:
         input: "items, and either pickup or a delivery address"
 ```
 
-| Key | Type | Required | Meaning |
-| --- | --- | --- | --- |
-| `name` | string | yes | `^[a-z][a-z0-9_]{0,63}$`, unique within the agent |
-| `summary` | string | yes | one sentence |
-| `input` | string | no | free-form hint, not a schema |
-| `output` | string | no | free-form hint, not a schema |
+| Key       | Type   | Required | Meaning                                           |
+| --------- | ------ | -------- | ------------------------------------------------- |
+| `name`    | string | yes      | `^[a-z][a-z0-9_]{0,63}$`, unique within the agent |
+| `summary` | string | yes      | one sentence                                      |
+| `input`   | string | no       | free-form hint, not a schema                      |
+| `output`  | string | no       | free-form hint, not a schema                      |
 
 A published action is a promise: do not list one the backend cannot honour.
 
@@ -185,24 +185,24 @@ A published action is a promise: do not list one the backend cannot honour.
 
 The manifest is the public document; this config file is not. The mapping:
 
-| Manifest member | Source |
-| --- | --- |
-| `manifest_version` | fixed by the daemon (`1.1`) |
-| `protocol` | fixed (`vireo/1`) |
-| `endpoint` | `server.endpoint` |
-| `agents[]` | `agents[]` (skipped entries are reported at startup) |
-| `agents[].actions` | `agents[].actions` |
-| `agents[].links` | `agents[].links`, falling back to `agents[].refs` |
-| `agents[].session.ttl_seconds` | the agent's effective `session.ttl` |
-| `agents[].limits` | `server.rate_limit.agents.<name>` |
-| `links` | `links`, falling back to `refs` |
-| `capabilities.session` | derived: `new`/`get`/`close` always on, `list`/`prune` from `session.list` |
-| `capabilities.progress`, `.cancel` | always on for this daemon |
-| `limits` | `server.rate_limit` (not advertised when limiting is off) |
-| `session.ttl_seconds` | `session.ttl_default` |
-| `commands` (deprecated) | the enabled subset of the session operations |
-| `refs` (deprecated) | `refs` |
-| `generated_at`, `digest` | computed at startup |
+| Manifest member                    | Source                                                                     |
+| ---------------------------------- | -------------------------------------------------------------------------- |
+| `manifest_version`                 | fixed by the daemon (`1.1`)                                                |
+| `protocol`                         | fixed (`vireo/1`)                                                          |
+| `endpoint`                         | `server.endpoint`                                                          |
+| `agents[]`                         | `agents[]` (skipped entries are reported at startup)                       |
+| `agents[].actions`                 | `agents[].actions`                                                         |
+| `agents[].links`                   | `agents[].links`, falling back to `agents[].refs`                          |
+| `agents[].session.ttl_seconds`     | the agent's effective `session.ttl`                                        |
+| `agents[].limits`                  | `server.rate_limit.agents.<name>`                                          |
+| `links`                            | `links`, falling back to `refs`                                            |
+| `capabilities.session`             | derived: `new`/`get`/`close` always on, `list`/`prune` from `session.list` |
+| `capabilities.progress`, `.cancel` | always on for this daemon                                                  |
+| `limits`                           | `server.rate_limit` (not advertised when limiting is off)                  |
+| `session.ttl_seconds`              | `session.ttl_default`                                                      |
+| `commands` (deprecated)            | the enabled subset of the session operations                               |
+| `refs` (deprecated)                | `refs`                                                                     |
+| `generated_at`, `digest`           | computed at startup                                                        |
 
 `session.list` controls **history browsing only**. Creating, reading and closing
 a session stay available, because a conversational agent is unusable without
@@ -247,7 +247,7 @@ Mint rules are validated at startup, so a contradictory `prefix` / `charset` /
 | `start_message` | string   | —               | greeting returned at session creation                           |
 | `actions`       | list     | —               | what the agent claims it can do                                 |
 | `links`         | list     | —               | references for this agent                                       |
-| `refs`          | map      | —               | deprecated; superseded by `links`                              |
+| `refs`          | map      | —               | deprecated; superseded by `links`                               |
 | `session`       | block    | inherits global | per-agent `ttl` and mint overrides                              |
 
 A conversational agent (`sessions: true`) requires a session id on every
