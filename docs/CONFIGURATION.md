@@ -237,7 +237,7 @@ Mint rules are validated at startup, so a contradictory `prefix` / `charset` /
 | `transport`     | string   | top-level       | this agent's webhook                                            |
 | `timeout`       | duration | `30s`           | per-message backend timeout                                     |
 | `start_message` | string   | —               | greeting returned at session creation                           |
-| `tags`          | list     | —               | free-form labels for selection                                 |
+| `tags`          | list     | —               | free-form labels for selection                                  |
 | `links`         | list     | —               | references for this agent                                       |
 | `refs`          | map      | —               | deprecated; superseded by `links`                               |
 | `session`       | block    | inherits global | per-agent `ttl` and mint overrides                              |

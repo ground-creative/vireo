@@ -266,11 +266,14 @@ func checkClientID(id string) error {
 // --- screens ---------------------------------------------------------------
 
 func doConnect(opts client.Options, host string) (*conn, error) {
-	addr, via, err := client.DiscoverDetail(host, nil)
+	addr, serverName, via, err := client.DiscoverTarget(host, nil)
 	if err != nil {
 		return nil, err
 	}
 	opts.Addr = addr
+	// The certificate must cover the name the operator typed, not wherever the
+	// SRV record pointed (PROTO-47, SEC-9).
+	opts.ServerName = serverName
 	c, err := client.Connect(context.Background(), opts)
 	if err != nil {
 		return nil, err
