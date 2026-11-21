@@ -158,40 +158,16 @@ working.
 `links` may also be set per agent; endpoint-level and agent-level links are
 additive, not replacing.
 
-## `actions`
-
-What an agent claims it can do. Optional, and a hint for routing rather than a
-whitelist: an agent without `actions` is fully usable.
-
-```yaml
-agents:
-  - name: "orders"
-    actions:
-      - name: "place_order"
-        summary: "Place a pickup or delivery order"
-        input: "items, and either pickup or a delivery address"
-```
-
-| Key       | Type   | Required | Meaning                                           |
-| --------- | ------ | -------- | ------------------------------------------------- |
-| `name`    | string | yes      | `^[a-z][a-z0-9_]{0,63}$`, unique within the agent |
-| `summary` | string | yes      | one sentence                                      |
-| `input`   | string | no       | free-form hint, not a schema                      |
-| `output`  | string | no       | free-form hint, not a schema                      |
-
-A published action is a promise: do not list one the backend cannot honour.
-
 ## What the daemon publishes, and where it comes from
 
 The manifest is the public document; this config file is not. The mapping:
 
 | Manifest member                    | Source                                                                     |
 | ---------------------------------- | -------------------------------------------------------------------------- |
-| `manifest_version`                 | fixed by the daemon (`1.1`)                                                |
+| `manifest_version`                 | fixed by the daemon (`1.2`)                                                |
 | `protocol`                         | fixed (`vireo/1`)                                                          |
 | `endpoint`                         | `server.endpoint`                                                          |
 | `agents[]`                         | `agents[]` (skipped entries are reported at startup)                       |
-| `agents[].actions`                 | `agents[].actions`                                                         |
 | `agents[].links`                   | `agents[].links`, falling back to `agents[].refs`                          |
 | `agents[].session.ttl_seconds`     | the agent's effective `session.ttl`                                        |
 | `agents[].limits`                  | `server.rate_limit.agents.<name>`                                          |
@@ -245,7 +221,6 @@ Mint rules are validated at startup, so a contradictory `prefix` / `charset` /
 | `transport`     | string   | top-level       | this agent's webhook                                            |
 | `timeout`       | duration | `30s`           | per-message backend timeout                                     |
 | `start_message` | string   | —               | greeting returned at session creation                           |
-| `actions`       | list     | —               | what the agent claims it can do                                 |
 | `links`         | list     | —               | references for this agent                                       |
 | `refs`          | map      | —               | deprecated; superseded by `links`                               |
 | `session`       | block    | inherits global | per-agent `ttl` and mint overrides                              |

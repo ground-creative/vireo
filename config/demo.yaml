@@ -60,13 +60,6 @@ agents:
   - name: "orders"
     description: "Take food orders: pizzas, sides, drinks, pickup or delivery"
     sessions: true                      # holds multi-turn conversations
-    actions:                            # what this agent claims it can do
-      - name: "place_order"
-        summary: "Place a pickup or delivery order"
-        input: "items, and either pickup or a delivery address"
-      - name: "check_order"
-        summary: "Report the state of an existing order"
-        input: "an order reference"
     links:
       - rel: "menu"
         href: "http://127.0.0.1:8088/menu"

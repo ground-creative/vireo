@@ -50,15 +50,6 @@ type linkConf struct {
 	Description string `yaml:"description"`
 }
 
-// actionConf is something an agent claims it can do. Input and Output are
-// free-form hints to a caller, not schemas.
-type actionConf struct {
-	Name    string `yaml:"name"`
-	Summary string `yaml:"summary"`
-	Input   string `yaml:"input"`
-	Output  string `yaml:"output"`
-}
-
 // rateLimitConf is a pointer in serverConf, and Enabled is a pointer here, so
 // the YAML can tell three cases apart:
 //
@@ -130,7 +121,6 @@ type agentConf struct {
 	Transport    string            `yaml:"transport"`
 	Timeout      string            `yaml:"timeout"`
 	Session      *agentSessionConf `yaml:"session"`
-	Actions      []actionConf      `yaml:"actions"`
 	Links        []linkConf        `yaml:"links"`
 	Refs         map[string]string `yaml:"refs"`
 }
@@ -555,7 +545,6 @@ func buildRegistry(cfg *config) (*upstream.Registry, protocol.Manifest, []string
 			Description:  client.Description(),
 			Sessions:     sessions,
 			StartMessage: client.StartMessage(),
-			Actions:      actionsFromConf(a.Actions),
 			Links:        linksFromConf(a.Links, a.Refs),
 			Limits:       manifestLimits(cfg.Server.RateLimit, name),
 			Refs:         a.Refs,
@@ -656,22 +645,6 @@ func linksFromConf(links []linkConf, refs map[string]string) []protocol.Link {
 			Label:       l.Label,
 			Type:        l.Type,
 			Description: l.Description,
-		})
-	}
-	return out
-}
-
-func actionsFromConf(actions []actionConf) []protocol.Action {
-	if len(actions) == 0 {
-		return nil
-	}
-	out := make([]protocol.Action, 0, len(actions))
-	for _, a := range actions {
-		out = append(out, protocol.Action{
-			Name:    a.Name,
-			Summary: a.Summary,
-			Input:   a.Input,
-			Output:  a.Output,
 		})
 	}
 	return out

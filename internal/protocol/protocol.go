@@ -27,7 +27,7 @@ const Version = "vireo/1"
 // independent of Version (the wire protocol) and of the spec release tag: a
 // MINOR bump is additive, and a client that does not know a member must ignore
 // it (MAN-1 .. MAN-5).
-const ManifestVersion = "1.1"
+const ManifestVersion = "1.2"
 
 // ManifestVersionFallback is what a manifest without manifest_version means: the
 // 1.0 shape, which carried refs and commands instead of links and capabilities
@@ -176,16 +176,6 @@ type Link struct {
 	Description string `json:"description,omitempty"`
 }
 
-// Action is something an agent claims it can do. Input and Output are
-// free-form hints, not schemas: a client must not reject a reply because it
-// does not match them (MAN-24 .. MAN-27).
-type Action struct {
-	Name    string `json:"name"`
-	Summary string `json:"summary"`
-	Input   string `json:"input,omitempty"`
-	Output  string `json:"output,omitempty"`
-}
-
 // SessionOps says which session operations the endpoint accepts. A capability
 // advertised as true MUST be accepted; false or absent MUST be rejected with a
 // documented error rather than silently ignored (MAN-28, MAN-52).
@@ -223,7 +213,6 @@ type AgentEntry struct {
 	Description  string            `json:"description,omitempty"`
 	Sessions     bool              `json:"sessions"`
 	StartMessage string            `json:"start_message,omitempty"`
-	Actions      []Action          `json:"actions,omitempty"`
 	Links        []Link            `json:"links,omitempty"`
 	Limits       *Limits           `json:"limits,omitempty"`
 	Session      *SessionPolicy    `json:"session,omitempty"`
@@ -273,7 +262,6 @@ type Manifest struct {
 var (
 	ManifestVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 	AgentNamePattern       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
-	ActionNamePattern      = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 	LinkRelPattern         = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
 	// AbsoluteURIPattern requires a scheme, which is what MAN-19 means by
 	// "absolute": a relative path is not a published reference.
@@ -354,19 +342,6 @@ func (m Manifest) validate() error {
 		seen[a.Name] = true
 		if a.Sessions {
 			anySessions = true
-		}
-		actSeen := make(map[string]bool, len(a.Actions))
-		for j, act := range a.Actions {
-			if !ActionNamePattern.MatchString(act.Name) {
-				return fmt.Errorf("agents[%d] %q: actions[%d] %q does not match %s (MAN-24)", i, a.Name, j, act.Name, ActionNamePattern)
-			}
-			if act.Summary == "" {
-				return fmt.Errorf("agents[%d] %q: actions[%d] %q: summary is required", i, a.Name, j, act.Name)
-			}
-			if actSeen[act.Name] {
-				return fmt.Errorf("agents[%d] %q: duplicate action %q (MAN-24)", i, a.Name, act.Name)
-			}
-			actSeen[act.Name] = true
 		}
 		if err := validateLinks(fmt.Sprintf("agents[%d] %q", i, a.Name), a.Links); err != nil {
 			return err

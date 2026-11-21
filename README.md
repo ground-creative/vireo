@@ -143,8 +143,8 @@ It does:
   `vireo/1`;
 - answer discovery for a domain through the single `_vireo._tcp` SRV record,
   with no assumed port;
-- publish a manifest of agents, their actions and published links, plus the
-  session operations it accepts;
+- publish a manifest of agents and published links, plus the session operations
+  it accepts;
 - hold session envelopes and forward every turn to one HTTP webhook;
 - relay progress lines and cancellation between the caller and that webhook.
 
