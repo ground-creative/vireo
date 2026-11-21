@@ -58,11 +58,16 @@ so a container config sets `transport` to that instead of `127.0.0.1`.
 
 ## Certificates
 
+**Certificate material is never committed.** `certs/` is ignored except for a
+placeholder, because a tracked `key.pem` is one `git commit -a` away from being
+published. The daemon reads whatever pair you put there, or whatever you mount
+over `/app/certs`.
+
 Development, self-signed for `localhost` and `127.0.0.1`:
 
 ```bash
 ./scripts/gen-certs.sh
-# wrote certs/cert.pem and certs/key.pem
+# wrote certs/cert.pem and certs/key.pem — both ignored by git
 ```
 
 Production, Let's Encrypt on a hostname pointing at this machine:
@@ -77,10 +82,28 @@ server:
   key_file: "/etc/letsencrypt/live/agent.example.com/privkey.pem"
 ```
 
+In a container, copy the pair into a directory and mount it, so renewals are a
+restart rather than a rebuild:
+
+```bash
+docker run … -v /srv/vireo-certs:/app/certs:ro vireo --config ziwa
+```
+
+The certificate must cover the **domain a client asks for**, which is not
+necessarily the SRV target: a client that resolves `_vireo._tcp.example.com`
+verifies `example.com`, even though it connects to `agent.example.com`. Give
+the certificate both names if you also want direct `host:port` addressing to
+work:
+
+```bash
+sudo certbot certonly --standalone -d example.com -d agent.example.com
+```
+
 Renewal reloads the daemon, which re-reads the certificate on start:
 
 ```bash
 sudo certbot renew --deploy-hook "systemctl restart vireo"
+# or, in a container: --deploy-hook "docker restart vireo"
 ```
 
 TLS 1.3 is required; there is no plaintext mode.

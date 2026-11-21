@@ -10,3 +10,10 @@ sessions/*
 /vireo
 /vireo-chat
 /fakeagent
+
+# Certificates are never committed. Development certs come from
+# scripts/gen-certs.sh; production certs are supplied at run time, usually by
+# mounting a directory over /app/certs. A tracked *.pem under certs/ means a
+# private key is one `git commit -a` away from being published.
+certs/*
+!certs/.gitkeep

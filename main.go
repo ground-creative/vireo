@@ -364,7 +364,12 @@ func loadConfig(path string) (*config, error) {
 func buildTLS(c *serverConf) (*tls.Config, error) {
 	cert, err := tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
 	if err != nil {
-		return nil, fmt.Errorf("load certificate: %w", err)
+		// Certificates are deliberately not committed or baked into the image,
+		// so a missing pair is the expected first failure of a fresh container.
+		return nil, fmt.Errorf("load certificate: %w\n"+
+			"no certificate pair at %q / %q. Generate one for development with "+
+			"./scripts/gen-certs.sh, or mount a real pair over /app/certs in a container",
+			err, c.CertFile, c.KeyFile)
 	}
 	protos := make([]string, 0, len(c.ALPN))
 	for _, p := range c.ALPN {

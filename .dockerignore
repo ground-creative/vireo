@@ -1,0 +1,22 @@
+# Keep the build context small, and keep secrets out of the image.
+.git
+.gitignore
+/docker/agent-labs
+
+# Binaries built in place.
+/vireo
+/vireo-chat
+/fakeagent
+
+# Runtime state.
+sessions/*
+
+# Certificate material never belongs in an image: a deployment mounts its own
+# directory over /app/certs. Only the placeholder survives, so the COPY step in
+# the Dockerfile still has a directory to copy.
+certs/*
+!certs/.gitkeep
+
+# Personal configs. The demo stays so `--config demo` works from an image.
+config/*
+!config/demo.yaml

@@ -302,6 +302,7 @@ lives in its own repository
 ```bash
 git clone https://github.com/ground-creative/vireo.git
 cd vireo
+./scripts/gen-certs.sh          # development certificate; ignored by git
 go build -o vireo .
 go build -o vireo-chat ./cmd/vireo-chat
 go build -o fakeagent  ./cmd/fakeagent
@@ -310,12 +311,14 @@ go build -o fakeagent  ./cmd/fakeagent
 `vireo` is the daemon and nothing else is needed to run it: no AI, no model, no
 API key. It forwards each turn to whatever `transport` names.
 
-Docker builds the same binary:
+Docker builds the same binary. Certificates are not in the image — mount a pair
+(generated with `./scripts/gen-certs.sh`, or your own) over `/app/certs`:
 
 ```bash
 docker build -t vireo .
 docker run --rm -p 7777:7777/tcp -p 7777:7777/udp \
   -v "$PWD/config:/app/config:ro" \
+  -v "$PWD/certs:/app/certs:ro" \
   -v "$PWD/sessions:/app/sessions" \
   vireo --config demo
 ```
