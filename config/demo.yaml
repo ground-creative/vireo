@@ -14,7 +14,7 @@ server:
   cert_file: "certs/cert.pem"
   key_file: "certs/key.pem"
   alpn:
-    - "vireo/1"
+    - "frontdoor/1"
   call_timeout: "45s"
   rate_limit:
     enabled: true

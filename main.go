@@ -1,6 +1,6 @@
 // Command vireo is a small daemon that lets AI assistants talk to business
 // agents directly over the network: TLS 1.3 (TCP) and QUIC (UDP) on one port,
-// ALPN vireo/1, a negotiate/manifest handshake with a required client id, and
+// ALPN frontdoor/1, a negotiate/manifest handshake with a required client id, and
 // messages forwarded to the business agents over an HTTP webhook. Sessions are
 // server-minted, scoped by client id and agent.
 package main

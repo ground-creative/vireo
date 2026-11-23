@@ -25,7 +25,7 @@ server:
   cert_file: "certs/cert.pem"
   key_file: "certs/key.pem"
   alpn:
-    - "vireo/1"
+    - "frontdoor/1"
   endpoint:
     id: "restaurant-prod"
     name: "restaurant"
@@ -69,7 +69,7 @@ agents:
 | `port`                 | int      | —                | TCP and UDP port; unset means the OS assigns one                      |
 | `cert_file`            | string   | —                | PEM certificate chain                                                 |
 | `key_file`             | string   | —                | PEM private key                                                       |
-| `alpn`                 | list     | `["vireo/1"]`    | negotiated protocols; `h3` is dropped with a warning                  |
+| `alpn`                 | list     | `["frontdoor/1"]`    | negotiated protocols; `h3` is dropped with a warning                  |
 | `call_timeout`         | duration | derived          | global ceiling for agent calls; default = longest agent timeout + 15s |
 | `endpoint.id`          | string   | —                | stable id peers see in the manifest                                   |
 | `endpoint.name`        | string   | first agent name | display name                                                          |
@@ -194,7 +194,7 @@ The manifest is the public document; this config file is not. The mapping:
 | Manifest member                    | Source                                                                     |
 | ---------------------------------- | -------------------------------------------------------------------------- |
 | `manifest_version`                 | fixed by the daemon (`1.3`)                                                |
-| `protocol`                         | fixed (`vireo/1`)                                                          |
+| `protocol`                         | fixed (`frontdoor/1`)                                                          |
 | `endpoint`                         | `server.endpoint`                                                          |
 | `agents[]`                         | `agents[]` (skipped entries are reported at startup)                       |
 | `agents[].tags`                    | `agents[].tags`                                                            |
