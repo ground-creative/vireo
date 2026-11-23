@@ -158,7 +158,7 @@ working.
 ### Why both, and for how long
 
 `refs` and `links` carry the same fact in two shapes. `links` is the expressive
-one: it can say what a reference *is*, with a label and a media type, and it can
+one: it can say what a reference _is_, with a label and a media type, and it can
 grow. `refs` is a bare map and cannot grow.
 
 They are emitted together because a client written against `manifest_version`
@@ -209,8 +209,8 @@ The manifest is the public document; this config file is not. The mapping:
 | `commands` (deprecated)            | the enabled subset of the session operations                               |
 | `refs` (deprecated)                | `refs`                                                                     |
 | `digest`                           | computed at startup                                                        |
-| `generated_at`                     | not emitted — freshness is the handshake; see MAN-42 and MAN-54             |
-| `expires_at`                       | not emitted — nothing caches this document                                  |
+| `generated_at`                     | not emitted — freshness is the handshake; see MAN-42 and MAN-54            |
+| `expires_at`                       | not emitted — nothing caches this document                                 |
 
 `session.list` controls **history browsing only**. Creating, reading and closing
 a session stay available, because a conversational agent is unusable without
