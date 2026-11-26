@@ -21,7 +21,30 @@ import (
 
 // Version is the ALPN identifier and the protocol string carried in negotiate
 // and manifest frames.
-const Version = "frontdoor/1"
+const Version = "portico/1"
+
+// ALPNCandidates is what a client offers, in preference order.
+//
+// The wire identifier has been renamed twice during the draft, and a daemon
+// that has not been redeployed still speaks the older string. Offering all of
+// them is what keeps a rename from being a flag day: the server selects one it
+// implements, and negotiation fails only if none match. A server should accept
+// every name in this list for a deprecation window; PROTO-1 requires it to
+// serve the current one, and PROTO-48 is the discovery-side equivalent.
+var ALPNCandidates = []string{Version, "frontdoor/1", "vireo/1"}
+
+// AcceptsProtocol reports whether a negotiate frame names a wire protocol this
+// daemon still speaks. During the draft the identifier was renamed twice, and a
+// client built against an earlier revision must keep working until the
+// deprecation window closes (PROTO-11, PROTO-48).
+func AcceptsProtocol(p string) bool {
+	for _, known := range ALPNCandidates {
+		if p == known {
+			return true
+		}
+	}
+	return false
+}
 
 // ManifestVersion is the manifest compatibility level this daemon emits. It is
 // independent of Version (the wire protocol) and of the spec release tag: a

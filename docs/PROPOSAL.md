@@ -13,7 +13,7 @@ The argument belongs to the specification, not to this implementation:
   [`informative/COMPARISON.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/informative/COMPARISON.md)
 
 The copy that lived here drifted: it still described `vireo/1` and `_vireo._tcp`
-after the specification renamed both to `frontdoor/1` and `_frontdoor._tcp`, and
+after the specification renamed both to `portico/1` and `_portico._tcp`, and
 it described a conformance level that has since been withdrawn. A second copy of
 an argument is a copy that goes out of date, so there is one instead.
 
@@ -24,4 +24,4 @@ deploying this daemon, this repository is the right place:
 
 - [`docs/CONFIGURATION.md`](CONFIGURATION.md) — every configuration key
 - [`docs/DEPLOYMENT.md`](DEPLOYMENT.md) — certificates, containers, ports
-- [`docs/PROTOCOL.md`](PROTOCOL.md) — how this daemon speaks `frontdoor/1`
+- [`docs/PROTOCOL.md`](PROTOCOL.md) — how this daemon speaks `portico/1`

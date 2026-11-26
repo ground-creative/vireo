@@ -14,7 +14,7 @@ server:
   cert_file: "certs/cert.pem"
   key_file: "certs/key.pem"
   alpn:
-    - "frontdoor/1"
+    - "portico/1"
   call_timeout: "45s"
   rate_limit:
     enabled: true
@@ -26,7 +26,7 @@ server:
     description: "Fresh pizza and table bookings for the neighborhood"
 
 # Default webhook every agent inherits. The backend dispatches on the
-# X-Vireo-Agent header. Override per agent only when it lives elsewhere.
+# X-Portico-Agent header. Override per agent only when it lives elsewhere.
 transport: "http://127.0.0.1:8088/vireo/message"
 
 # Static references published in the manifest. `links` is the current shape: an

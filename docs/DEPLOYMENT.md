@@ -90,7 +90,7 @@ docker run … -v /srv/vireo-certs:/app/certs:ro vireo --config ziwa
 ```
 
 The certificate must cover the **domain a client asks for**, which is not
-necessarily the SRV target: a client that resolves `_frontdoor._tcp.example.com`
+necessarily the SRV target: a client that resolves `_portico._tcp.example.com`
 verifies `example.com`, even though it connects to `agent.example.com`. Give
 the certificate both names if you also want direct `host:port` addressing to
 work:
@@ -140,18 +140,18 @@ nginx or Caddy cannot terminate it.
 
 ## DNS discovery
 
-A peer given a bare domain resolves `_frontdoor._tcp.<domain>`. That record is the
+A peer given a bare domain resolves `_portico._tcp.<domain>`. That record is the
 only thing consulted — no port is assumed — so publishing it is what makes
 `connect example.com` work:
 
 ```
-_frontdoor._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
+_portico._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
 ```
 
 Check it:
 
 ```bash
-dig +short SRV _frontdoor._tcp.example.com
+dig +short SRV _portico._tcp.example.com
 ```
 
 ## systemd
@@ -195,8 +195,8 @@ loaded config/restaurant.yaml
 agent ready: orders (via https, sessions=true, mint=^[A-Za-z0-9_-]{32}$)
 session store: file sessions/vireo-sessions.json — 0 record(s) (0 open, 0 closed, 0 expired)
 endpoint "restaurant" (restaurant-prod) fronts 2 agent(s); commands: session.close, session.get, session.list, session.new, session.prune
-listening on [::]:7777 (tcp/tls, alpn=frontdoor/1)
-listening on [::]:7777 (quic, alpn=frontdoor/1)
+listening on [::]:7777 (tcp/tls, alpn=portico/1)
+listening on [::]:7777 (quic, alpn=portico/1)
 ```
 
 ## Operations

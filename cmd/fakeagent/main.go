@@ -92,7 +92,7 @@ func handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Agent == "" {
-		req.Agent = r.Header.Get("X-Vireo-Agent")
+		req.Agent = r.Header.Get("X-Portico-Agent")
 	}
 	n := countTurn(req.Agent + "/" + req.SessionID)
 	log.Printf("webhook agent=%q session=%q turn=%d message=%q", req.Agent, req.SessionID, n, req.Message)

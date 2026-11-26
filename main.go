@@ -1,6 +1,6 @@
 // Command vireo is a small daemon that lets AI assistants talk to business
 // agents directly over the network: TLS 1.3 (TCP) and QUIC (UDP) on one port,
-// ALPN frontdoor/1, a negotiate/manifest handshake with a required client id, and
+// ALPN portico/1, a negotiate/manifest handshake with a required client id, and
 // messages forwarded to the business agents over an HTTP webhook. Sessions are
 // server-minted, scoped by client id and agent.
 package main
@@ -378,6 +378,22 @@ func buildTLS(c *serverConf) (*tls.Config, error) {
 			continue
 		}
 		protos = append(protos, p)
+	}
+	// Always serve every name the draft has used, not only what this config
+	// happens to list. A client built against an earlier revision is otherwise
+	// refused at the TLS layer before it can even negotiate, which turns a
+	// rename into a flag day for anyone we did not redeploy in lockstep.
+	for _, known := range protocol.ALPNCandidates {
+		seen := false
+		for _, p := range protos {
+			if p == known {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			protos = append(protos, known)
+		}
 	}
 	if len(protos) == 0 {
 		protos = []string{protocol.Version}

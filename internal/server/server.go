@@ -362,7 +362,7 @@ func (c *connState) handshake() error {
 			return err
 		}
 	}
-	if req.Protocol != "" && req.Protocol != protocol.Version {
+	if req.Protocol != "" && !protocol.AcceptsProtocol(req.Protocol) {
 		c.writeError(f.StreamID, protocol.CodeBadProtocol, fmt.Sprintf("unsupported protocol %q (want %q)", req.Protocol, protocol.Version))
 		return fmt.Errorf("unsupported protocol %q", req.Protocol)
 	}

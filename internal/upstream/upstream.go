@@ -150,10 +150,10 @@ func (w *webhook) Send(ctx context.Context, call Call) (protocol.MessageResponse
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/x-ndjson, application/json")
-	req.Header.Set("X-Frontdoor-Protocol", protocol.Version)
-	req.Header.Set("X-Vireo-Agent", w.name)
+	req.Header.Set("X-Portico-Protocol", protocol.Version)
+	req.Header.Set("X-Portico-Agent", w.name)
 	if call.SessionID != "" {
-		req.Header.Set("X-Vireo-Session", call.SessionID)
+		req.Header.Set("X-Portico-Session", call.SessionID)
 	}
 
 	resp, err := w.http.Do(req)

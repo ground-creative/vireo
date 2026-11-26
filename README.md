@@ -9,14 +9,14 @@ way: DNS-based discovery, a manifest of what that business chooses to expose, an
 a session to hold the conversation in.
 
 The goal is a protocol anyone can implement. A business runs one small daemon on
-its own infrastructure; any client that speaks `frontdoor/1` and looks the domain up
+its own infrastructure; any client that speaks `portico/1` and looks the domain up
 gets the list of agents that business exposes and can talk to them directly. The
 answers still come from the business — the daemon routes each turn to its webhook
 and keeps the session. Nothing else. MCP-speaking hosts reach a daemon through the
-optional `vireo-mcp` bridge; other runtimes can implement `frontdoor/1` natively.
+optional `vireo-mcp` bridge; other runtimes can implement `portico/1` natively.
 
 ```text
-AI host ──MCP──▶ vireo-mcp ──[DNS SRV + frontdoor/1]──▶ vireo ──HTTP POST──▶ your backend
+AI host ──MCP──▶ vireo-mcp ──[DNS SRV + portico/1]──▶ vireo ──HTTP POST──▶ your backend
 ```
 
 Three things sit side by side here, and keeping them apart is the point of this
@@ -25,11 +25,11 @@ README:
 |                      | What it is                                                                              | Where                                                                             |
 | -------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | **Agent Front Door** | The open specification: the problem, the protocol, the manifest, the conformance ladder | [agent-front-door-spec](https://github.com/ground-creative/agent-front-door-spec) |
-| **`frontdoor/1`**    | The concrete wire protocol implemented here today                                       | [`docs/PROTOCOL.md`](docs/PROTOCOL.md)                                            |
+| **`portico/1`**    | The concrete wire protocol implemented here today                                       | [`docs/PROTOCOL.md`](docs/PROTOCOL.md)                                            |
 | **Vireo**            | The Go daemon and clients that demonstrate the architecture                             | this repository                                                                   |
 
 Vireo is a starting point for that effort, not the owner of the proposed standard.
-`frontdoor/1` is one working implementation of the idea, not a ratified
+`portico/1` is one working implementation of the idea, not a ratified
 specification.
 
 ## The problem
@@ -99,7 +99,7 @@ No separate application-level agent directory or centralized discovery service i
 required: DNS carries discovery, and the manifest carries the rest. No particular
 AI model or agent framework needs to be involved on either side.
 
-The current `frontdoor/1` protocol implements a concrete subset of this — framing,
+The current `portico/1` protocol implements a concrete subset of this — framing,
 handshake, manifest, sessions, messages, a webhook contract, progress and
 cancellation — and is specified frame by frame in
 [`docs/PROTOCOL.md`](docs/PROTOCOL.md). The manifest object it serves is
@@ -119,7 +119,7 @@ first implementation.
 The deeper reasoning, the protocol principles, the open questions and the
 invitation to take part are in the specification:
 [`informative/PROPOSAL.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/informative/PROPOSAL.md).
-Nothing here claims that `frontdoor/1` has already been adopted as an independent
+Nothing here claims that `portico/1` has already been adopted as an independent
 community standard; it is the starting point we can experiment with today.
 
 ## Vireo as the reference implementation
@@ -128,7 +128,7 @@ community standard; it is the starting point we can experiment with today.
 
 A single Go binary per domain. It listens on one port with TLS 1.3 and QUIC, is
 found through the current Vireo discovery convention, a DNS SRV record at
-`_frontdoor._tcp.<domain>`, and serves the manifest: the agents that domain exposes,
+`_portico._tcp.<domain>`, and serves the manifest: the agents that domain exposes,
 what each one claims it can do, and the references it publishes alongside them —
 a site, docs, a wiki, a status page. The manifest is built from configuration at
 startup, not on every connection. Every turn then goes to one HTTP webhook. No
@@ -141,8 +141,8 @@ It was built by asking an AI to design the protocol it would use itself.
 It does:
 
 - serve one port carrying both TCP + TLS 1.3 and UDP + QUIC, with ALPN selecting
-  `frontdoor/1`;
-- answer discovery for a domain through the single `_frontdoor._tcp` SRV record,
+  `portico/1`;
+- answer discovery for a domain through the single `_portico._tcp` SRV record,
   with no assumed port;
 - publish a manifest of agents and published links, plus the session operations
   it accepts;
@@ -184,8 +184,8 @@ is for.
       ┌───────────┐
       │ vireo-mcp │   AI-host side · separate repository
       └─────┬─────┘
-            │ frontdoor/1 over TLS 1.3 (TCP) or QUIC (UDP)
-            │ endpoint found by DNS SRV: _frontdoor._tcp.<domain>
+            │ portico/1 over TLS 1.3 (TCP) or QUIC (UDP)
+            │ endpoint found by DNS SRV: _portico._tcp.<domain>
             ▼
       ┌───────────┐
       │   vireo   │   business side · this repository
@@ -197,9 +197,9 @@ is for.
       │  backend  │   your model, your logic, your data
       └───────────┘
 
-  No MCP? vireo-chat speaks frontdoor/1 to the daemon directly:
+  No MCP? vireo-chat speaks portico/1 to the daemon directly:
 
-  vireo-chat ──frontdoor/1 (TLS/QUIC, DNS SRV)──▶ vireo ──HTTP POST──▶ backend
+  vireo-chat ──portico/1 (TLS/QUIC, DNS SRV)──▶ vireo ──HTTP POST──▶ backend
 ```
 
 | Component    | Repository                                                                | Runs on                       | Required?                  |
@@ -211,10 +211,10 @@ is for.
 
 What follows from that split:
 
-- **The wire protocol is independent of MCP.** `frontdoor/1` is the contract between
+- **The wire protocol is independent of MCP.** `portico/1` is the contract between
   a client and a daemon; MCP is only how an MCP-speaking host reaches it.
 - **MCP is one integration mechanism, not a requirement.** A runtime that can
-  speak `frontdoor/1` natively does not need `vireo-mcp` at all, and `vireo-chat` is
+  speak `portico/1` natively does not need `vireo-mcp` at all, and `vireo-chat` is
   the proof: it connects to a daemon with no MCP anywhere in the path.
 - **The daemon needs no model, AI provider or API key.** It forwards a turn and
   returns an answer; whether a model, a database or a person produced that
@@ -288,7 +288,7 @@ command:
 ./vireo-chat connect ziwa.ai
 ```
 
-`connect ziwa.ai` resolves through `_frontdoor._tcp.ziwa.ai`, lists what that business
+`connect ziwa.ai` resolves through `_portico._tcp.ziwa.ai`, lists what that business
 publishes today, and opens a session. From an AI host, the same host name through
 [vireo-mcp](#connecting-ai-hosts-through-vireo-mcp).
 
@@ -456,30 +456,30 @@ the first turn that it was already said, so a model does not repeat it.
 
 ### DNS discovery
 
-A peer given a bare domain looks it up as `_frontdoor._tcp.<domain>`:
+A peer given a bare domain looks it up as `_portico._tcp.<domain>`:
 
 ```
-_frontdoor._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
+_portico._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
 ```
 
 That record is the only way a domain resolves — there is no assumed port. An
 endpoint without a record has to be addressed as `host:port`.
 
-`_frontdoor._tcp` is the current Vireo discovery convention, not an established
+`_portico._tcp` is the current Vireo discovery convention, not an established
 industry standard. The implementation serves TCP/TLS and UDP/QUIC on the same
 port, and both are found through this one `_tcp` record; there is no separate
 `_udp` record today.
 
 ## Connecting AI hosts through Vireo MCP
 
-An MCP-speaking AI host speaks MCP, not `frontdoor/1`. The bridge between them is
+An MCP-speaking AI host speaks MCP, not `portico/1`. The bridge between them is
 `vireo-mcp`, maintained in its own repository:
 [`ground-creative/vireo-mcp`](https://github.com/ground-creative/vireo-mcp).
 
 It is optional. It is the shortest path for a host that already speaks MCP, and
 it is where MCP-specific concerns live — host configuration, stdio versus
 Streamable HTTP, persistent client identity, bearer tokens, tool descriptions,
-progress notifications and cancellation mapping. A runtime that speaks `frontdoor/1`
+progress notifications and cancellation mapping. A runtime that speaks `portico/1`
 directly, as `vireo-chat` does, never needs it.
 
 ```bash
@@ -533,9 +533,9 @@ Every turn is one HTTP POST to the agent's `transport`.
 ```
 POST /vireo/message
 Content-Type: application/json
-X-Frontdoor-Protocol: frontdoor/1
-X-Vireo-Agent: orders
-X-Vireo-Session: 4f1c8a2e9b7d4c0fa1e2d3b4c5a6f7e8
+X-Portico-Protocol: portico/1
+X-Portico-Agent: orders
+X-Portico-Session: 4f1c8a2e9b7d4c0fa1e2d3b4c5a6f7e8
 
 {
   "agent": "orders",
@@ -616,7 +616,7 @@ are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md#cancelling-a-turn).
   defaults, inheritance, startup validation, and how config maps to the manifest
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — build, Docker, certificates,
   install, firewall, DNS, systemd, operations
-- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — how this daemon speaks `frontdoor/1`
+- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — how this daemon speaks `portico/1`
 - [`vireo-mcp`](https://github.com/ground-creative/vireo-mcp) — the MCP bridge,
   its host setup, transports, identity and tokens
 
