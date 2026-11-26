@@ -148,8 +148,8 @@ It does:
 - answer discovery for a domain through a `_portico._tcp` SRV record, with no
   assumed port, and still honour the retired `_vireo._tcp` and `_frontdoor._tcp`
   records so an unmigrated peer keeps working;
-- publish a manifest of agents and published links, plus the session operations
-  it accepts;
+- serve a manifest of agents and published links, plus the session operations it
+  accepts, as the first frame of every session;
 - hold session envelopes and forward every turn to one HTTP webhook;
 - relay progress lines and cancellation between the caller and that webhook.
 
