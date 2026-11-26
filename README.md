@@ -29,8 +29,8 @@ README:
 | **Vireo**            | The Go daemon and clients that demonstrate the architecture                             | this repository                                                                   |
 
 Vireo is a starting point for that effort, not the owner of the proposed standard.
-`portico/1` is one working implementation of the idea, not a ratified
-specification.
+This daemon is one working implementation of the specification, and the protocol
+it speaks is not a ratified one.
 
 ## The problem
 
@@ -119,8 +119,9 @@ first implementation.
 The deeper reasoning, the protocol principles, the open questions and the
 invitation to take part are in the specification:
 [`informative/PROPOSAL.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/informative/PROPOSAL.md).
-Nothing here claims that `portico/1` has already been adopted as an independent
-community standard; it is the starting point we can experiment with today.
+Nothing here claims that the specification, or the protocol it defines, has already
+been adopted as an independent community standard; it is the starting point we can
+experiment with today.
 
 ## Vireo as the reference implementation
 
