@@ -1,12 +1,14 @@
 # Vireo
 
-**An open protocol for direct communication between AI agents and businesses —
-with a working reference implementation in Go.**
+**An open protocol for direct communication between AI agents and any party that
+controls a domain — with a working reference implementation in Go.**
 
-A business is already discoverable through its domain name. Vireo starts from the
-question of why an AI agent should not discover the business _itself_ the same
-way: DNS-based discovery, a manifest of what that business chooses to expose, and
-a session to hold the conversation in.
+Every party that owns a domain is already discoverable through it. Vireo starts
+from the question of why an AI agent should not discover that party _itself_ the
+same way: DNS-based discovery, a manifest of what it chooses to expose, and a
+session to hold the conversation in. A business is the commonest case and the one
+the examples here use; a person running an agent on their own hardware is the same
+case with a different owner, and the protocol does not distinguish them.
 
 The goal is a protocol anyone can implement. A business runs one small daemon on
 its own infrastructure; any client that speaks `portico/1` and looks the domain up
