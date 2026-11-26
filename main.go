@@ -371,32 +371,32 @@ func buildTLS(c *serverConf) (*tls.Config, error) {
 			"./scripts/gen-certs.sh, or mount a real pair over /app/certs in a container",
 			err, c.CertFile, c.KeyFile)
 	}
-	protos := make([]string, 0, len(c.ALPN))
+	// Always serve every name the draft has used, and serve the current one
+	// first. Go's TLS server picks the protocol by *its own* preference order,
+	// so a config that still lists a retired name ahead of the current one makes
+	// every client negotiate the retired name — which is exactly what happened
+	// the first time this was deployed: the daemon served portico/1 but every
+	// client got frontdoor/1.
+	//
+	// Serving all of them is still the point: a client built against an earlier
+	// revision is otherwise refused at the TLS layer before it can negotiate.
+	protos := make([]string, 0, len(protocol.ALPNCandidates)+len(c.ALPN))
+	protos = append(protos, protocol.ALPNCandidates...)
 	for _, p := range c.ALPN {
 		if p == "h3" {
 			log.Printf("warning: dropping alpn %q (HTTP/3 is not implemented)", p)
 			continue
 		}
-		protos = append(protos, p)
-	}
-	// Always serve every name the draft has used, not only what this config
-	// happens to list. A client built against an earlier revision is otherwise
-	// refused at the TLS layer before it can even negotiate, which turns a
-	// rename into a flag day for anyone we did not redeploy in lockstep.
-	for _, known := range protocol.ALPNCandidates {
 		seen := false
-		for _, p := range protos {
-			if p == known {
+		for _, have := range protos {
+			if have == p {
 				seen = true
 				break
 			}
 		}
 		if !seen {
-			protos = append(protos, known)
+			protos = append(protos, p)
 		}
-	}
-	if len(protos) == 0 {
-		protos = []string{protocol.Version}
 	}
 	return &tls.Config{
 		Certificates: []tls.Certificate{cert},
