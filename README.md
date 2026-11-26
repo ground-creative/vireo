@@ -292,16 +292,9 @@ command:
 ./vireo-chat connect ziwa.ai
 ```
 
-`connect ziwa.ai` resolves the domain, lists what that business publishes today,
-and opens a session. From an AI host, the same host name through
-[vireo-mcp](#connecting-ai-hosts-through-vireo-mcp).
-
-One detail worth knowing if you run this yourself: that deployment still
-publishes the retired `_vireo._tcp` record, so the client reaches it through the
-`PROTO-48` fallback and reports which record answered. `_portico._tcp` is what
-the specification publishes now, and the daemon here serves it; the record at
-`ziwa.ai` has not been added yet, which is a DNS edit at that zone rather than a
-change to this code.
+`connect ziwa.ai` resolves through `_portico._tcp.ziwa.ai`, lists what that
+endpoint publishes today, and opens a session. From an AI host, the same host name
+through [vireo-mcp](#connecting-ai-hosts-through-vireo-mcp).
 
 ## Install
 
