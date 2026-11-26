@@ -154,6 +154,37 @@ Check it:
 dig +short SRV _portico._tcp.example.com
 ```
 
+### Migrating an existing endpoint
+
+The protocol identifier was renamed twice during the draft, so three record names
+exist in the wild. A client must try all of them (`PROTO-48`), and this daemon
+serves every ALPN name it has used, so an endpoint keeps working while its DNS
+catches up. That is why an unmigrated deployment is not an outage — but it is
+reported as one, and it should be fixed.
+
+To move an endpoint from `_vireo._tcp` to `_portico._tcp`, publish the new record
+with the **same target and port**, then leave the old one in place for at least
+one release:
+
+```
+_portico._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
+_vireo._tcp.example.com.   300 IN SRV 10 5 7777 agent.example.com.   ; kept for old clients
+```
+
+Both records point at the same daemon, so there is nothing to migrate on the
+server side: the daemon already accepts either name. When a client resolves, it
+tries `_portico` first and reports which record answered, so you can confirm the
+new one is live from the client side:
+
+```bash
+dig +short SRV _portico._tcp.example.com   # must return a target and port
+./vireo-chat connect example.com           # should NOT say "retired"
+```
+
+The record is a DNS edit at whoever hosts the zone — Cloudflare, Route 53, the
+registrar. Nothing in this repository can publish it, because DNS is the
+business's own authority and that is the point of the design.
+
 ## systemd
 
 `/etc/systemd/system/vireo.service`:
