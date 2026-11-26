@@ -25,7 +25,7 @@ README:
 |                      | What it is                                                                              | Where                                                                             |
 | -------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | **Agent Front Door** | The open specification: the problem, the protocol, the manifest, the conformance ladder | [agent-front-door-spec](https://github.com/ground-creative/agent-front-door-spec) |
-| **`portico/1`**    | The concrete wire protocol implemented here today                                       | [`docs/PROTOCOL.md`](docs/PROTOCOL.md)                                            |
+| **`portico/1`**      | The concrete wire protocol implemented here today                                       | [`docs/PROTOCOL.md`](docs/PROTOCOL.md)                                            |
 | **Vireo**            | The Go daemon and clients that demonstrate the architecture                             | this repository                                                                   |
 
 Vireo is a starting point for that effort, not the owner of the proposed standard.
@@ -128,8 +128,8 @@ experiment with today.
 ### What Vireo is
 
 A single Go binary per domain. It listens on one port with TLS 1.3 and QUIC, is
-found through the current Vireo discovery convention, a DNS SRV record at
-`_portico._tcp.<domain>`, and serves the manifest: the agents that domain exposes,
+found through a DNS SRV record at `_portico._tcp.<domain>`, and serves the
+manifest: the agents that domain exposes,
 what each one claims it can do, and the references it publishes alongside them —
 a site, docs, a wiki, a status page. The manifest is built from configuration at
 startup, not on every connection. Every turn then goes to one HTTP webhook. No
@@ -143,8 +143,9 @@ It does:
 
 - serve one port carrying both TCP + TLS 1.3 and UDP + QUIC, with ALPN selecting
   `portico/1`;
-- answer discovery for a domain through the single `_portico._tcp` SRV record,
-  with no assumed port;
+- answer discovery for a domain through a `_portico._tcp` SRV record, with no
+  assumed port, and still honour the retired `_vireo._tcp` and `_frontdoor._tcp`
+  records so an unmigrated peer keeps working;
 - publish a manifest of agents and published links, plus the session operations
   it accepts;
 - hold session envelopes and forward every turn to one HTTP webhook;
@@ -289,9 +290,16 @@ command:
 ./vireo-chat connect ziwa.ai
 ```
 
-`connect ziwa.ai` resolves through `_portico._tcp.ziwa.ai`, lists what that business
-publishes today, and opens a session. From an AI host, the same host name through
+`connect ziwa.ai` resolves the domain, lists what that business publishes today,
+and opens a session. From an AI host, the same host name through
 [vireo-mcp](#connecting-ai-hosts-through-vireo-mcp).
+
+One detail worth knowing if you run this yourself: that deployment still
+publishes the retired `_vireo._tcp` record, so the client reaches it through the
+`PROTO-48` fallback and reports which record answered. `_portico._tcp` is what
+the specification publishes now, and the daemon here serves it; the record at
+`ziwa.ai` has not been added yet, which is a DNS edit at that zone rather than a
+change to this code.
 
 ## Install
 
@@ -463,13 +471,15 @@ A peer given a bare domain looks it up as `_portico._tcp.<domain>`:
 _portico._tcp.example.com. 300 IN SRV 10 5 7777 agent.example.com.
 ```
 
-That record is the only way a domain resolves — there is no assumed port. An
-endpoint without a record has to be addressed as `host:port`.
+That record is how a domain resolves — there is no assumed port. An endpoint
+without any of the accepted records has to be addressed as `host:port`.
 
-`_portico._tcp` is the current Vireo discovery convention, not an established
-industry standard. The implementation serves TCP/TLS and UDP/QUIC on the same
-port, and both are found through this one `_tcp` record; there is no separate
-`_udp` record today.
+`_portico._tcp` is what this implementation publishes and serves. It is not an
+established industry standard. The implementation serves TCP/TLS and UDP/QUIC on
+the same port, and both are found through this one `_tcp` record; there is no
+separate `_udp` record today. The retired `_vireo._tcp` and `_frontdoor._tcp`
+names keep resolving for one deprecation window (`PROTO-48`), and a client reports
+which record answered so an unmigrated deployment is visible rather than silent.
 
 ## Connecting AI hosts through Vireo MCP
 
