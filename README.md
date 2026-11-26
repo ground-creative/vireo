@@ -22,11 +22,11 @@ AI host ──MCP──▶ vireo-mcp ──[DNS SRV + frontdoor/1]──▶ vire
 Three things sit side by side here, and keeping them apart is the point of this
 README:
 
-|                                  | What it is                                                                     | Where                                  |
-| -------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------- |
+|                      | What it is                                                                              | Where                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | **Agent Front Door** | The open specification: the problem, the protocol, the manifest, the conformance ladder | [agent-front-door-spec](https://github.com/ground-creative/agent-front-door-spec) |
-| **`frontdoor/1`**                    | The concrete wire protocol implemented here today                              | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) |
-| **Vireo**                        | The Go daemon and clients that demonstrate the architecture                    | this repository                        |
+| **`frontdoor/1`**    | The concrete wire protocol implemented here today                                       | [`docs/PROTOCOL.md`](docs/PROTOCOL.md)                                            |
+| **Vireo**            | The Go daemon and clients that demonstrate the architecture                             | this repository                                                                   |
 
 Vireo is a starting point for that effort, not the owner of the proposed standard.
 `frontdoor/1` is one working implementation of the idea, not a ratified
