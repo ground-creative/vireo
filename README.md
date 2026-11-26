@@ -24,7 +24,7 @@ README:
 
 |                                  | What it is                                                                     | Where                                  |
 | -------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------- |
-| **The open protocol initiative** | The shared effort to agree on rules for direct agent-to-business communication | [`docs/PROPOSAL.md`](docs/PROPOSAL.md) |
+| **Agent Front Door** | The open specification: the problem, the protocol, the manifest, the conformance ladder | [agent-front-door-spec](https://github.com/ground-creative/agent-front-door-spec) |
 | **`frontdoor/1`**                    | The concrete wire protocol implemented here today                              | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) |
 | **Vireo**                        | The Go daemon and clients that demonstrate the architecture                    | this repository                        |
 
@@ -117,9 +117,10 @@ happens if the rules are built in the open, by more than the people who wrote th
 first implementation.
 
 The deeper reasoning, the protocol principles, the open questions and the
-invitation to take part are in [`docs/PROPOSAL.md`](docs/PROPOSAL.md). Nothing here
-claims that `frontdoor/1` has already been adopted as an independent community
-standard; it is the starting point we can experiment with today.
+invitation to take part are in the specification:
+[`informative/PROPOSAL.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/informative/PROPOSAL.md).
+Nothing here claims that `frontdoor/1` has already been adopted as an independent
+community standard; it is the starting point we can experiment with today.
 
 ## Vireo as the reference implementation
 
@@ -615,13 +616,13 @@ are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md#cancelling-a-turn).
   defaults, inheritance, startup validation, and how config maps to the manifest
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — build, Docker, certificates,
   install, firewall, DNS, systemd, operations
-- [`docs/PROPOSAL.md`](docs/PROPOSAL.md) and [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
-  — superseded copies of the proposal and protocol, kept for history
+- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — how this daemon speaks `frontdoor/1`
 - [`vireo-mcp`](https://github.com/ground-creative/vireo-mcp) — the MCP bridge,
   its host setup, transports, identity and tokens
 
 The protocol is the part that needs other people. If you are building an AI
 runtime, a daemon in another language, or you run a business that wants its own
-agents reachable at its own domain, the place to start is
-[`docs/PROPOSAL.md`](docs/PROPOSAL.md). Independent implementations that
-interoperate are the only real measure of whether any of this works.
+agents reachable at its own domain, the place to start is the
+[specification](https://github.com/ground-creative/agent-front-door-spec).
+Independent implementations that interoperate are the only real measure of whether
+any of this works.

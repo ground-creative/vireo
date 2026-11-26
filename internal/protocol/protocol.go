@@ -8,7 +8,6 @@
 package protocol
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -397,11 +396,13 @@ func validateLinks(where string, links []Link) error {
 }
 
 // ComputeDigest returns the MAN-40 digest: sha256 over the canonical JSON form
-// of the document with digest and signature removed. Canonicalisation here is
-// "marshal, decode into a generic value, marshal again", which sorts object
-// members. HTML escaping is disabled so the bytes match RFC 8785 as MAN-40
-// requires: `<`, `>` and `&` stay literal, and any client canonicalising the
-// same document computes the same digest.
+// of the document with digest and signature removed.
+//
+// The document hashed is the bytes this daemon puts on the wire, not a
+// re-serialisation of a Go struct. That distinction is the whole point of a
+// digest: a client receives a document and must be able to reproduce the same
+// string from it. canonicalJSON implements RFC 8785 so that a client in any
+// language computing over the same members gets the same answer.
 func (m Manifest) ComputeDigest() (string, error) {
 	m.Digest = ""
 	m.Signature = nil
@@ -409,19 +410,28 @@ func (m Manifest) ComputeDigest() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var doc map[string]any
-	if err := json.Unmarshal(raw, &doc); err != nil {
+	return DigestOfDocument(raw)
+}
+
+// DigestOfDocument returns the MAN-40 digest of a manifest document given as
+// bytes. It is what a client calls, and what ComputeDigest calls, so the
+// publisher and the reader cannot disagree about which bytes were hashed.
+func DigestOfDocument(raw []byte) (string, error) {
+	value, err := decodeCanonical(raw)
+	if err != nil {
 		return "", err
+	}
+	doc, ok := value.(map[string]any)
+	if !ok {
+		return "", errors.New("digest: document is not a JSON object")
 	}
 	delete(doc, "digest")
 	delete(doc, "signature")
-	var canon bytes.Buffer
-	enc := json.NewEncoder(&canon)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(doc); err != nil {
+	canon, err := canonicalDocument(doc)
+	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(bytes.TrimRight(canon.Bytes(), "\n"))
+	sum := sha256.Sum256(canon)
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
