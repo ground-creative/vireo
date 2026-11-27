@@ -2,50 +2,124 @@
 
 A vireo backend that answers through an [OpenClaw](https://openclaw.ai) gateway.
 
-```bash
-./bin/openclaw-bridge                 # reads openclaw-bridge.yaml
-./bin/openclaw-bridge -config other.yaml -addr :18090
-```
+vireo forwards each message over HTTP; this program turns that into an OpenClaw
+agent run and returns the answer. vireo has no idea a model is involved.
 
 ```
 vireo-chat ──portico/1──▶ vireo ──webhook──▶ openclaw-bridge ──/v1/chat/completions──▶ gateway
 ```
 
-This is one of two backends in this repository. `fakeagent` returns canned text
-so the plumbing can be tested without a model; this one returns real answers. They
-are interchangeable as far as vireo is concerned — see
-[what a backend is](../../docs/BACKENDS.md).
+It is one of two backends here — the other is `fakeagent`, which returns canned
+text so the plumbing can be tested without a model.
+[What a backend is](../../docs/BACKENDS.md) covers the contract and how to write
+your own.
 
-## Quick start
+---
+
+## Install
+
+Needs Go 1.22+ and a running OpenClaw gateway on the same machine or reachable over
+the network.
 
 ```bash
-# 1. the gateway's OpenAI-compatible surface is OFF by default
+git clone https://github.com/ground-creative/vireo.git
+cd vireo
+./scripts/build.sh          # → bin/openclaw-bridge, plus the rest
+```
+
+That builds every binary in the repository. If you want only this one:
+
+```bash
+go build -o bin/openclaw-bridge ./cmd/openclaw-bridge
+```
+
+---
+
+## Configure the gateway first
+
+Two things on the gateway side, before the bridge will start.
+
+**1. The OpenAI-compatible surface is disabled by default.**
+
+```bash
 openclaw config set gateway.http.endpoints.chatCompletions.enabled true
-
-# 2. the token, which is a secret and does not go in the YAML
-export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/openclaw.json)"
-
-# 3. config: copy the shipped example
-cp cmd/openclaw-bridge/openclaw-bridge.example.yaml openclaw-bridge.yaml
-
-# 4. run, in this order — the gateway answers the bridge's startup probe
-openclaw gateway run &
-./bin/openclaw-bridge &
-./bin/vireo --config openclaw
 ```
 
-Or all of it in one command, which is what the Makefile and
-[`../dev.sh`](../../scripts/dev.sh) do:
+Applies without a restart. Check it:
 
 ```bash
-./scripts/dev.sh --config openclaw
+curl -s http://127.0.0.1:18789/v1/models \
+  -H "Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN"
 ```
 
-## Configuration
+That should list agent targets (`openclaw`, `openclaw/default`,
+`openclaw/<agentId>`). A `404` means the surface is still off.
 
-`openclaw-bridge.yaml`, taken by `-config` (default: that name in the working
-directory). Unknown keys are rejected, so a typo fails at startup instead of being
-ignored.
+**2. The token is the gateway's operator credential.**
+
+```bash
+export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/openclaw.json)"
+```
+
+It is not a provider API key and not scoped — a valid token is equivalent to owner
+access to the gateway. Keep it in the environment, not in a file you might commit.
+
+---
+
+## Run
+
+```bash
+cd vireo
+./bin/openclaw-bridge              # reads ./openclaw-bridge.yaml
+```
+
+With no config file it refuses to start and prints the copy command. To get one:
+
+```bash
+cp cmd/openclaw-bridge/openclaw-bridge.example.yaml openclaw-bridge.yaml
+./bin/openclaw-bridge
+```
+
+Expected output:
+
+```
+openclaw bridge listening on :18090 (POST /vireo/message, gateway http://127.0.0.1:18789, agents: concierge (OpenClaw main agent))
+token source: OPENCLAW_GATEWAY_TOKEN (environment)
+```
+
+Then point vireo at it. In another terminal:
+
+```bash
+./bin/vireo --config demo          # demo.yaml's transport is fakeagent, so edit it,
+                                   # or use the one-command path below
+./bin/vireo-chat -insecure connect localhost:7777
+```
+
+### The one-command way
+
+`scripts/dev.sh --backend openclaw` writes a matching vireo config for you, starts
+the gateway if needed, the bridge, the daemon, and the client, and removes the
+config on exit:
+
+```bash
+./scripts/dev.sh --backend openclaw
+```
+
+Use this for a local test. Use the explicit sequence above when you are wiring a
+real deployment, where the vireo config is yours to write.
+
+### If the gateway is already running
+
+The bridge reuses it and leaves it alone on exit. `dev.sh` does the same — it only
+starts a gateway it does not find.
+
+---
+
+## Config reference
+
+Taken by `-config`, default `openclaw-bridge.yaml` in the working directory.
+Unknown keys are **rejected**, so a typo fails at startup rather than being
+silently ignored.
 
 ```yaml
 listen: ":18090"
@@ -62,17 +136,27 @@ agents:
     id: "main"
 ```
 
+### Top level
+
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `listen` | string | `:18090` | address to bind |
-| `openclaw.base_url` | string | `http://127.0.0.1:18789` | the gateway |
-| `openclaw.token` | string | — | optional; prefer `OPENCLAW_GATEWAY_TOKEN` |
-| `openclaw.model` | string | `openclaw/default` | default agent target |
-| `openclaw.timeout` | duration | `180s` | per-request ceiling toward the gateway |
-| `default` | string | — | agent used when the webhook names an unknown one |
-| `agents` | map | required | vireo agent name → OpenClaw agent |
+| `default` | string | — | agent used when the webhook names one that is not in `agents`; empty means unknown agents get a 404 |
+| `agents` | map | **required** | vireo agent name → OpenClaw agent |
 
-Each `agents` entry:
+### `openclaw`
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `base_url` | string | `http://127.0.0.1:18789` | the gateway's HTTP API (same port as its Control UI) |
+| `token` | string | — | optional; `OPENCLAW_GATEWAY_TOKEN` is preferred. If both are set the **file wins** |
+| `model` | string | `openclaw/default` | default agent target for agents without an override |
+| `timeout` | duration | `180s` | ceiling per request toward the gateway; vireo's `call_timeout` must be **above** it |
+
+### `agents.<name>`
+
+The key is the `agent` field of the webhook payload, so it must match a `name` in
+your vireo config.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
@@ -80,28 +164,34 @@ Each `agents` entry:
 | `label` | string | human name, logs only |
 | `model` | string | target override, e.g. `openclaw/research` |
 
-The map key is the `agent` field of the webhook payload, so it must match a
-`name` in the vireo config. One bridge serves several vireo agents; each can point
-at a different OpenClaw agent, or at the same one on a different model.
+One bridge serves several vireo agents. Each can point at a different OpenClaw
+agent, or at the same one on a different model:
 
-### Why the token is not in this file
-
-It is the gateway's full operator credential — a valid token is equivalent to
-owner access to the gateway, and it can drive whatever tools that agent has. A file
-meant to be copied and shared should not carry one. `openclaw.token` exists for a
-throwaway local setup; `OPENCLAW_GATEWAY_TOKEN` is the intended path, and it wins
-over nothing — the file wins if both are set, so an explicit local value is
-possible.
+```yaml
+agents:
+  concierge:
+    id: "main"
+  researcher:
+    id: "main"
+    model: "openclaw/research"
+```
 
 ### Why the port is 18090
 
 `:8088` is `fakeagent`, `:8089` the ZIWA bridge, `:8090-8094` VS Code's own server
 on a developer machine. `:18090` is clear of all of them.
 
-## How it maps sessions
+### Why the token is not in the file
 
-vireo mints a session id; this binary never does. OpenAI's Chat Completions has no
-session field, so the id is hashed into the `user` value and OpenClaw derives its
+The file is meant to be copied and read. `openclaw.token` exists for a throwaway
+local setup; the environment variable is the intended path.
+
+---
+
+## Sessions
+
+vireo mints the session id; this program never does. OpenAI's Chat Completions has
+no session field, so the id is hashed into the `user` value and OpenClaw derives its
 session key from that:
 
 ```
@@ -111,35 +201,79 @@ vireo session id ──sha256──▶ "vireo-<32 hex>" ──▶ OpenAI `user` 
 - **History is never resent.** The gateway holds it; resending would duplicate
   every earlier turn.
 - **Deterministic**, so a bridge restart resumes the same conversations.
-- **Lowercase hex**, because the gateway lowercases session keys and two ids
-  differing only by case would otherwise collapse into one.
-- **No reserved namespace**, since the gateway rejects keys beginning
-  `subagent:`, `cron:` or `acp:`.
+- **Lowercase hex**, because the gateway lowercases session keys — two ids
+  differing only by case would otherwise collapse into one conversation.
+- **Clear of reserved namespaces** (`subagent:`, `cron:`, `acp:`), which the
+  gateway rejects.
 - **A stateless vireo agent sends no `user`**, so the gateway mints a one-shot
   session and nothing carries over.
 
-Full reasoning, the isolation settings a multi-user deployment needs, and every
-failure mode: [`../../docs/OPENCLAW-GATEWAY.md`](../../docs/OPENCLAW-GATEWAY.md).
+**Isolation is a gateway-side concern.** Three OpenClaw features share context
+across sessions by default on a personal install. If more than one caller will use
+this, read [`../../docs/OPENCLAW-GATEWAY.md`](../../docs/OPENCLAW-GATEWAY.md#isolation-between-conversations)
+before going further — a value told to one conversation can otherwise be recalled
+by another.
 
-## What it does not do
+---
 
-- **No reply streaming.** It sends one progress line then the full answer. The
-  gateway streams; forwarding those deltas as `kind: "chunk"` frames is a
-  later change.
-- **No tool passthrough.** The gateway's own tools work; a caller's tools are not
+## Verifying it works
+
+```bash
+B=http://127.0.0.1:18090/vireo/message
+post() { curl -s -H 'Accept: application/x-ndjson' -d "$1" $B | tail -1; }
+
+post '{"agent":"concierge","session_id":"A1","message":"Remember LANTERN. Reply OK."}'
+post '{"agent":"concierge","session_id":"A1","message":"What word?"}'     # → LANTERN
+post '{"agent":"concierge","session_id":"A1","message":"Second question"}' # continues
+```
+
+The first two lines prove the session mapping: the second turn recalls the first
+without the history being resent.
+
+---
+
+## Limits
+
+- **No reply streaming.** One progress line, then the whole answer. The gateway
+  streams; forwarding those deltas as `kind: "chunk"` frames is a later change.
+- **No tool passthrough.** The gateway's own tools work; a caller's are not
   proxied.
 - **No model choice by the caller.** A caller picks a vireo agent; the model is
   gateway configuration, because letting a caller set it is an operator action.
-- **No history reconstruction.** If the gateway loses a session, that
-  conversation restarts on its side.
+- **No history reconstruction.** If the gateway loses a session, that conversation
+  restarts on its side.
 
-## Testing
+---
+
+## When it will not start
+
+Every failure names its own fix.
+
+| Message | Cause | Fix |
+| --- | --- | --- |
+| `/v1/models is not served` | surface disabled | the `config set` above |
+| `gateway rejected the token` | token is not `gateway.auth.token` | re-export it |
+| `gateway unreachable at …` | gateway not running | `openclaw gateway run` |
+| `config … not found` | no YAML | it prints the `cp` command |
+| `agent "x" has no openclaw agent id` | `agents.x.id` missing | add the `id` |
+| `default "x" is not one of the configured agents` | `default` names a missing key | fix the name |
+| `unknown field` | typo in the YAML | the error names the key |
+
+At runtime: `404` means the surface was disabled again; `401` means the token
+rotated; `409` means the gateway session is archived (restore it in the Control UI);
+`503` is provider overload; `agent run was cancelled` means vireo timed out — raise
+its `call_timeout`.
+
+---
+
+## Tests
 
 ```bash
 go test ./internal/openclaw/
 ```
 
-The suite pins the parts that must not drift: `SessionKey` stability (changing it
+The suite pins what must not drift silently: `SessionKey` stability (changing it
 orphans every conversation), turn two carrying the same `user` as turn one, no
 history resent, a stateless turn sending none, the start message reaching the agent,
-ndjson progress, and every startup failure naming its own fix.
+ndjson progress, an empty answer becoming an error rather than a blank reply, and
+every startup failure naming its fix.

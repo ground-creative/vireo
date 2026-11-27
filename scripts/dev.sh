@@ -2,17 +2,20 @@
 # dev.sh — run a whole local vireo stack with one command.
 #
 #   ./scripts/dev.sh                     # daemon + client, with the stub backend
-#   ./scripts/dev.sh --config openclaw   # the same, plus the gateway and bridge
-#   ./scripts/dev.sh --config demo -q    # quieter
+#   ./scripts/dev.sh --backend openclaw  # the same, plus the gateway and bridge
+#   ./scripts/dev.sh --backend openclaw -q
+#
+# There is one YAML in config/, demo.yaml. Any other backend gets a scratch config
+# written to config/dev-<backend>.yaml and deleted on exit, so the repository does
+# not carry a shipped file per backend.
 #
 # What it handles, so a local run needs no decisions:
 #
 #   * generates certs/ if missing (scripts/gen-certs.sh)
-#   * builds the binaries if missing or older than the sources
-#   * starts the backend(s) the chosen config needs, and stops them on exit
+#   * builds the binaries (scripts/build.sh) and starts what the backend needs
 #   * connects vireo-chat with -insecure, which is correct on loopback: the
-#     certificate is there because the transport is TLS-only, not because a
-#     local socket has anything to defend against. See docs/LOCAL-TESTING.md.
+#     certificate is there because the transport is TLS-only. See
+#     docs/LOCAL-TESTING.md
 #
 # Every child's output is prefixed with a tag, so a failure is attributable at a
 # glance. Ctrl-C stops everything; no orphans are left holding a port.
@@ -21,26 +24,21 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-config="demo"
+backend=""
+config=""
 quiet=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    -c|--config) config="${2:-}"; shift 2 ;;
-    -q|--quiet)  quiet="1"; shift ;;
-    -h|--help)   sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -b|--backend) backend="${2:-}"; shift 2 ;;
+    -c|--config)  config="${2:-}"; shift 2 ;;
+    -q|--quiet)   quiet="1"; shift ;;
+    -h|--help)    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "dev.sh: unknown argument $1 (try --help)" >&2; exit 2 ;;
   esac
 done
 
 log()  { [ -n "$quiet" ] || printf '\033[1;36m▸\033[0m %s\n' "$*"; }
 die()  { printf '\033[1;31m✗\033[0m %s\n' "$*" >&2; exit 1; }
-
-# --- locate the config -------------------------------------------------------
-
-# --config takes a name inside config/, which is the daemon's own rule.
-cfg_name="$(basename "${config%.yaml}")"
-cfg_path="config/$cfg_name.yaml"
-[ -f "$cfg_path" ] || die "no config at $cfg_path — try: $0 --config demo"
 
 # --- prerequisites ----------------------------------------------------------
 
@@ -71,6 +69,11 @@ log "building binaries into $BIN/"
 # kill a whole pipeline (`{ cmd | prefix; } &`) rather than only its subshell.
 set -m
 pids=()
+scratch_cfg=""   # set when this run wrote config/dev-<backend>.yaml
+cleanup_cfg() {
+  [ -n "$scratch_cfg" ] && rm -f "$scratch_cfg"
+  return 0
+}
 cleanup() {
   local pid
   for pid in "${pids[@]:-}"; do
@@ -80,7 +83,9 @@ cleanup() {
   pids=()
   wait 2>/dev/null || true
 }
-trap cleanup EXIT INT TERM
+# The one EXIT handler: stop every child in its process group, then remove the
+# scratch config if this run created one. Nothing else may install a trap.
+trap 'cleanup; cleanup_cfg' EXIT INT TERM
 
 # prefix tags each output line so several processes in one terminal stay readable.
 prefix() {
@@ -111,25 +116,77 @@ wait_http() {
   die "$what did not become healthy at $url (its output is above)"
 }
 
-# --- the backend(s) this config needs ---------------------------------------
+# --- the config, and the backend it needs -----------------------------------
 
-# A config names the backend it expects in its own first comment line:
-#
-#   # dev-backend: openclaw
-#
-# That keeps the knowledge in one place — next to the config that needs it —
-# instead of a case statement here that must be extended for every backend the
-# repository gains. A config without the line gets the daemon and client only.
+# There is one committed config: config/demo.yaml. A backend that needs a
+# different endpoint gets a scratch config written here and deleted on exit,
+# because a shipped file per backend would be demo.yaml with a different port and
+# transport — maintained, ignored, and explained again for no gain. The shape
+# lives in demo.yaml; the differences live in cmd/<backend>/README.md.
 
-backend="$(sed -n 's/^#[[:space:]]*dev-backend:[[:space:]]*\([a-z0-9-]*\).*/\1/p' "$cfg_path" | head -1)"
+if [ -n "$config" ]; then
+  # An explicit --config wins, for someone keeping their own endpoint.
+  cfg_name="$(basename "${config%.yaml}")"
+  cfg_path="config/$cfg_name.yaml"
+  [ -f "$cfg_path" ] || die "no config at $cfg_path"
+else
+  case "${backend:-demo}" in
+    demo)
+      cfg_name=demo
+      cfg_path=config/demo.yaml
+      ;;
+    openclaw)
+      cfg_name=dev-openclaw
+      cfg_path="config/$cfg_name.yaml"
+      scratch_cfg="$cfg_path"
+      # Do NOT trap here: cleanup (installed below) stops the children and is the
+      # one EXIT handler. Trapping again would silently replace it and leave the
+      # daemon and bridge running after the client exits.
+      mkdir -p config   # the daemon reads YAML only from config/
+      cat > "$cfg_path" <<'YAML'
+# Generated by scripts/dev.sh for a local run. Not committed; deleted on exit.
+# Same shape as demo.yaml, with the OpenClaw bridge as the backend.
+server:
+  port: 7779
+  cert_file: "certs/cert.pem"
+  key_file: "certs/key.pem"
+  alpn:
+    - "portico/1"
+  call_timeout: "200s"        # above the bridge's 180s gateway timeout
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+    burst: 10
+  endpoint:
+    id: "openclaw-dev"
+    name: "openclaw"
+    description: "A local OpenClaw agent, reachable over the portico protocol."
 
-case "$backend" in
-  fakeagent)
-    log "starting the stub backend (fakeagent on :8088)"
-    start_child fakeagent "$BIN/fakeagent"
-    wait_http http://127.0.0.1:8088/health "fakeagent"
-    ;;
+transport: "http://127.0.0.1:18090/vireo/message"
 
+session:
+  list: true
+  ttl_default: 3600
+  store: "file"
+  file: "dev-openclaw-sessions.json"
+  retention: "720h"
+
+agents:
+  - name: "concierge"
+    description: "Ask the local OpenClaw agent anything; it keeps a conversation."
+    start_message: "Hi — I'm the OpenClaw agent. What can I help with?"
+    timeout: "190s"
+YAML
+      ;;
+    *)
+      die "unknown --backend '$backend' (try: demo, openclaw — or --config <name>)"
+      ;;
+  esac
+fi
+
+# --- the backend process(es) -------------------------------------------------
+
+case "${backend:-}" in
   openclaw)
     if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ] && [ -r "$HOME/.openclaw/openclaw.json" ]; then
       OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token // empty' "$HOME/.openclaw/openclaw.json" 2>/dev/null || true)"
@@ -155,10 +212,10 @@ case "$backend" in
     fi
 
     log "starting the OpenClaw bridge (:18090)"
+    # A local override wins; otherwise the example next to the command is used,
+    # so a first run needs no copy step.
     bridge_cfg=openclaw-bridge.yaml
     if [ ! -f "$bridge_cfg" ]; then
-      # The example ships next to the command; use it rather than demanding a
-      # copy for a local run.
       bridge_cfg=cmd/openclaw-bridge/openclaw-bridge.example.yaml
       [ -n "$quiet" ] || log "no openclaw-bridge.yaml — using the shipped example"
     fi
@@ -167,11 +224,14 @@ case "$backend" in
     ;;
 
   "")
-    [ -n "$quiet" ] || log "config '$cfg_name' names no backend (no '# dev-backend:' line) — daemon and client only"
-    ;;
-
-  *)
-    die "config '$cfg_name' asks for backend '$backend', which this script does not know"
+    # demo.yaml names an agent served by fakeagent; start it.
+    if [ "$cfg_name" = "demo" ]; then
+      log "starting the stub backend (fakeagent on :8088)"
+      start_child fakeagent "$BIN/fakeagent"
+      wait_http http://127.0.0.1:8088/health "fakeagent"
+    else
+      [ -n "$quiet" ] || log "config '$cfg_name': no backend to start"
+    fi
     ;;
 esac
 

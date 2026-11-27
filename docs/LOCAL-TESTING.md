@@ -4,17 +4,22 @@ One command runs a whole stack locally:
 
 ```bash
 ./scripts/dev.sh                     # daemon + client, with the stub backend
-./scripts/dev.sh --config openclaw   # the same, plus the gateway and bridge
+./scripts/dev.sh --backend openclaw  # the same, plus the gateway and bridge
 ```
 
 That is the whole procedure. It generates a certificate if there is none, builds
-what is stale, starts the processes the chosen config needs, connects
-`vireo-chat`, and stops everything when the client exits.
+the binaries, starts what the backend needs, connects `vireo-chat`, and stops
+everything when the client exits.
+
+There is one committed config, `config/demo.yaml`. `--backend openclaw` writes a
+matching vireo config to `config/dev-openclaw.yaml` for the run and deletes it on
+exit, so the repository does not carry a second YAML that differs only in a port
+and a transport.
 
 ```
 ▸ starting the OpenClaw bridge (:18090)
 [bridge] openclaw bridge listening on :18090 ...
-▸ starting the daemon (vireo --config openclaw, port 7779)
+▸ starting the daemon (vireo --config dev-openclaw, port 7779)
 [vireo] listening on [::]:7779 (tcp/tls, ...)
 ▸ connecting vireo-chat — Ctrl-C stops every process above
 ```
@@ -100,10 +105,10 @@ The script is a convenience, not a requirement. The same three processes by hand
 
 ```bash
 ./scripts/gen-certs.sh
-go build -o vireo . && go build -o vireo-chat ./cmd/vireo-chat
-./fakeagent                    # stub backend, :8088
-./vireo --config demo          # daemon, :7777
-./vireo-chat -insecure connect localhost:7777
+./scripts/build.sh
+./bin/fakeagent                # stub backend, :8088
+./bin/vireo --config demo      # daemon, :7777
+./bin/vireo-chat -insecure connect localhost:7777
 ```
 
 For the OpenClaw path there are two more, and their order matters — the gateway
@@ -114,11 +119,11 @@ export PATH="$HOME/.nvm/versions/node/v24.22.3/bin:$PATH"
 export PATH="$HOME/.npm/_npx/87115a8ab6c363bd/node_modules/.bin:$PATH"
 openclaw gateway run                                 # :18789
 export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/openclaw.json)"
-./openclaw-bridge                                    # :18090
-./vireo --config openclaw                            # :7779
-./vireo-chat -insecure connect localhost:7779
+./bin/openclaw-bridge                                # :18090 (example config)
+./scripts/dev.sh --backend openclaw                  # or let the script do all of it
 ```
 
-See [`cmd/openclaw-bridge/README.md`](../cmd/openclaw-bridge/README.md) for what the
-bridge does with sessions, and [`OPENCLAW-GATEWAY.md`](OPENCLAW-GATEWAY.md) for the
+See [`cmd/openclaw-bridge/README.md`](../cmd/openclaw-bridge/README.md) for the
+bridge — install, run, every config key — and
+[`OPENCLAW-GATEWAY.md`](OPENCLAW-GATEWAY.md) for the gateway side and the
 isolation settings a multi-user deployment needs.

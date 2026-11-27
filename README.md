@@ -212,11 +212,30 @@ is for.
 | `vireo-chat`      | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | any operator's terminal       | optional — a direct client |
 | `vireo-mcp`       | [ground-creative/vireo-mcp](https://github.com/ground-creative/vireo-mcp) | the AI host                   | optional — an MCP adapter  |
 
-The backends that ship with `vireo`, and what a backend is, are in
-[`docs/BACKENDS.md`](docs/BACKENDS.md) — they are interchangeable and this table is
-not the place to keep counting them.
+The backends that ship with `vireo` are in the next section. They are
+interchangeable, so this table stops at the parts that are not.
 
-What follows from that split:
+## Backends
+
+A **backend** is whatever answers the messages the daemon forwards. vireo does not
+know what is behind a `transport` URL. [`docs/BACKENDS.md`](docs/BACKENDS.md)
+explains the webhook contract and how to write one.
+
+Bridges live in `cmd/<name>/`, each with its own README — they are documented next
+to the code, not here, because they need different things installed and this page
+would have to grow a section per backend.
+
+| Backend | What it is | Docs |
+| --- | --- | --- |
+| `fakeagent` | canned replies, no model, no key — for testing the daemon | [`cmd/fakeagent`](cmd/fakeagent) |
+| `openclaw-bridge` | a real agent through an [OpenClaw](https://openclaw.ai) gateway | [`cmd/openclaw-bridge`](cmd/openclaw-bridge) |
+
+Backends we intend to add live in the same shape: an HTTP server speaking the
+webhook contract, under `cmd/`, with a README covering install, run and configure.
+Nothing in this repository needs to change to add one —
+[`scripts/build.sh`](scripts/build.sh) discovers it.
+
+What follows from the split between daemon, client and backend:
 
 - **The wire protocol is independent of MCP.** `portico/1` is the contract between
   a client and a daemon; MCP is only how an MCP-speaking host reaches it.
@@ -318,15 +337,6 @@ backend never means editing a build file, this README, or the Dockerfile. What i
 produces, and the one exception (the daemon is the root package), is in
 [`docs/BUILDING.md`](docs/BUILDING.md).
 
-To use a real backend instead of the stub, add
-[`openclaw-bridge`](cmd/openclaw-bridge) — it has its own setup, because it needs a
-gateway:
-
-```bash
-export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/openclaw.json)"
-./scripts/dev.sh --config openclaw
-```
-
 Docker builds the same set. Certificates are not in the image — mount a pair
 (generated with `./scripts/gen-certs.sh`, or your own) over `/app/certs`:
 
@@ -353,13 +363,12 @@ you quit:
 
 ```bash
 ./scripts/dev.sh                    # stub backend + daemon + client
-./scripts/dev.sh --config openclaw  # also starts the OpenClaw gateway and bridge
+./scripts/dev.sh --backend openclaw # also starts the OpenClaw gateway and bridge
 ```
 
 Then `connect localhost:7777` in the client, pick an agent, and send a message.
 Every process's output is prefixed with its name, so a failure is attributable at
-a glance. `--config` is required by the daemon and reads YAML only from
-`config/`; `fakeagent` stands in for your own backend and disappears the moment
+a glance. `fakeagent` stands in for your own backend and disappears the moment
 `transport` names a real service.
 
 See [`docs/LOCAL-TESTING.md`](docs/LOCAL-TESTING.md) for what the script does, why

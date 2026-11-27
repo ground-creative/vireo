@@ -25,14 +25,14 @@ check: fmt vet test ## what to run before pushing
 certs: ## generate a development certificate if there is none
 	@test -f certs/cert.pem && echo "certs/ already present" || ./scripts/gen-certs.sh
 
-run: ## run a local stack (CONFIG=demo by default)
-	@./scripts/dev.sh --config $(or $(CONFIG),demo)
+run: ## run a local stack (BACKEND=demo by default)
+	@./scripts/dev.sh --backend $(or $(BACKEND),demo)
 
 run-demo: ## run the local stack against the stub backend
-	@./scripts/dev.sh --config demo
+	@./scripts/dev.sh --backend demo
 
 run-openclaw: ## run the local stack against an OpenClaw gateway
-	@./scripts/dev.sh --config openclaw
+	@./scripts/dev.sh --backend openclaw
 
 clean: ## remove built binaries and local certificates
 	@rm -rf bin

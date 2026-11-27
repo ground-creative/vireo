@@ -1,7 +1,7 @@
-# Everything in config/ is personal except the shipped examples.
+# Everything in config/ is personal except the demo, which is the shape every
+# other config copies. There is deliberately only one shipped config.
 config/*
 !config/demo.yaml
-!config/openclaw.yaml
 
 # The bridge config may carry a gateway token; only the example ships. The
 # example lives next to the command, so it travels with the code it configures.
