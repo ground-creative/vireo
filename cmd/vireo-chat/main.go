@@ -38,6 +38,7 @@ type conn struct {
 func main() {
 	proto := flag.String("proto", "tls", "transport: tls or quic")
 	insecure := flag.Bool("insecure", false, "skip certificate verification (UNSAFE; local development only)")
+	caFile := flag.String("ca", "", "PEM bundle to trust for this daemon, e.g. certs/cert.pem (verification stays on)")
 	idFlag := flag.String("id", "", "client id override (default: generated once and stored in the config dir)")
 	name := flag.String("name", "vireo-chat", "human-readable client name")
 	timeout := flag.Duration("timeout", 120*time.Second, "per-request timeout; a model-backed agent can take a minute or more")
@@ -48,6 +49,9 @@ func main() {
 	// active attacker on the path can impersonate the endpoint (SEC-6).
 	if *insecure {
 		fmt.Println("warning: -insecure disables certificate verification; the endpoint's identity is not established")
+	}
+	if *caFile != "" && *insecure {
+		fmt.Println("note: -ca has no effect while -insecure is set; verification is skipped entirely")
 	}
 
 	// The host may be given directly ("vireo-chat localhost:7777") or after
@@ -93,6 +97,7 @@ func main() {
 			fmt.Printf("\n  · %s", p.Text)
 		},
 		Insecure: *insecure,
+		CAFile:   *caFile,
 		UseQUIC:  *proto == "quic",
 	}
 

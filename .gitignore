@@ -1,6 +1,11 @@
-# Everything in config/ is personal except the demo.
+# Everything in config/ is personal except the shipped examples.
 config/*
 !config/demo.yaml
+!config/openclaw.yaml
+
+# The bridge config may carry a gateway token; only the example ships.
+openclaw-bridge.yaml
+!openclaw-bridge.example.yaml
 
 # Runtime session envelopes are ignored; .gitkeep keeps the folder in the repo.
 sessions/*
@@ -10,6 +15,7 @@ sessions/*
 /vireo
 /vireo-chat
 /fakeagent
+/openclaw-bridge
 
 # Certificates are never committed. Development certs come from
 # scripts/gen-certs.sh; production certs are supplied at run time, usually by

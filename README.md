@@ -206,12 +206,13 @@ is for.
   vireo-chat ──portico/1 (TLS/QUIC, DNS SRV)──▶ vireo ──HTTP POST──▶ backend
 ```
 
-| Component    | Repository                                                                | Runs on                       | Required?                  |
-| ------------ | ------------------------------------------------------------------------- | ----------------------------- | -------------------------- |
-| `vireo`      | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | the business's infrastructure | yes — it is the endpoint   |
-| `vireo-chat` | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | any operator's terminal       | optional — a direct client |
-| `fakeagent`  | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | a development machine         | optional — a stub backend  |
-| `vireo-mcp`  | [ground-creative/vireo-mcp](https://github.com/ground-creative/vireo-mcp) | the AI host                   | optional — an MCP adapter  |
+| Component         | Repository                                                                | Runs on                       | Required?                  |
+| ----------------- | ------------------------------------------------------------------------- | ----------------------------- | -------------------------- |
+| `vireo`           | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | the business's infrastructure | yes — it is the endpoint   |
+| `vireo-chat`      | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | any operator's terminal       | optional — a direct client |
+| `fakeagent`       | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | a development machine         | optional — a stub backend  |
+| `openclaw-bridge` | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | next to an OpenClaw gateway   | optional — a real backend  |
+| `vireo-mcp`       | [ground-creative/vireo-mcp](https://github.com/ground-creative/vireo-mcp) | the AI host                   | optional — an MCP adapter  |
 
 What follows from that split:
 
@@ -298,10 +299,13 @@ through [vireo-mcp](#connecting-ai-hosts-through-vireo-mcp).
 
 ## Install
 
-Three binaries come from this repository: `vireo`, the daemon, `vireo-chat`, a
-terminal client, and `fakeagent`, a stub backend used to test a webhook. The other
-client, **`vireo-mcp`**, is the MCP bridge so an AI host does the talking — it
-lives in its own repository
+Four binaries come from this repository: `vireo`, the daemon, `vireo-chat`, a
+terminal client, `fakeagent`, a stub backend used to test a webhook, and
+`openclaw-bridge`, a **working** backend that answers through an
+[OpenClaw](https://openclaw.ai) gateway — the smallest complete deployment, and
+the one to read if you are writing your own backend
+([docs/OPENCLAW.md](docs/OPENCLAW.md)). The other client, **`vireo-mcp`**, is the
+MCP bridge so an AI host does the talking — it lives in its own repository
 ([Connecting AI hosts through Vireo MCP](#connecting-ai-hosts-through-vireo-mcp)).
 
 ```bash
@@ -311,6 +315,7 @@ cd vireo
 go build -o vireo .
 go build -o vireo-chat ./cmd/vireo-chat
 go build -o fakeagent  ./cmd/fakeagent
+go build -o openclaw-bridge ./cmd/openclaw-bridge   # optional: needs a gateway
 ```
 
 `vireo` is the daemon and nothing else is needed to run it: no AI, no model, no
@@ -336,23 +341,38 @@ from source.
 
 ### Check the install
 
-Three processes, three terminals, no model anywhere — the local run is the
-quickest proof the build works:
+One command runs the whole local stack — it generates a certificate, builds what
+is stale, starts the backend, the daemon and the client, and stops everything when
+you quit:
 
 ```bash
-./fakeagent                    # 1. stub backend on :8088
-./vireo --config demo          # 2. daemon, TLS + QUIC on :7777
-./vireo-chat -insecure         # 3. client, in another terminal
+./scripts/dev.sh                    # stub backend + daemon + client
+./scripts/dev.sh --config openclaw  # also starts the OpenClaw gateway and bridge
 ```
 
-In the client, `connect localhost:7777` lists the agents from `config/demo.yaml`
-and any message gets the stub's answer. `--config` is required; the daemon reads
-YAML only from `config/`. `fakeagent` stands in for your own backend and
-disappears the moment `transport` names a real service.
+Then `connect localhost:7777` in the client, pick an agent, and send a message.
+Every process's output is prefixed with its name, so a failure is attributable at
+a glance. `--config` is required by the daemon and reads YAML only from
+`config/`; `fakeagent` stands in for your own backend and disappears the moment
+`transport` names a real service.
 
-The `-insecure` flag is needed locally because the certificate from
-`scripts/gen-certs.sh` is not issued by a public CA. It is a development
-setting, it prints a warning when used, and it is not the default.
+See [`docs/LOCAL-TESTING.md`](docs/LOCAL-TESTING.md) for what the script does, why
+the certificate exists, and when to reach for `-ca` instead of `-insecure`.
+
+By hand, the same three processes:
+
+```bash
+./fakeagent                       # 1. stub backend on :8088
+./vireo --config demo             # 2. daemon, TLS + QUIC on :7777
+./vireo-chat -insecure            # 3. client, in another terminal
+```
+
+`-insecure` is correct for a loopback test: the certificate exists because the
+transport is TLS-only, not because a local socket has anything to authenticate.
+Use `-ca certs/cert.pem` when the same config may later point at a real
+deployment — verification stays on, and a daemon presenting any other certificate
+is refused. See
+[Certificate verification in the clients](#certificate-verification-in-the-clients).
 
 ### Certificate verification in the clients
 
@@ -365,23 +385,62 @@ active attacker on the path can present its own certificate and the client
 cannot tell, so the manifest's origin is not established.
 
 Local development uses a certificate from `scripts/gen-certs.sh` that no public
-CA chains to, so the handshake fails with an explanation and the flag to skip
-verification is named in the error. Skipping is opt-in and loud:
+CA chains to, so the handshake fails until the client is told what to do about
+it. Two options, and which one is right depends on the lifetime of the setting:
+
+**`-insecure` for a disposable local run.** Nothing is being authenticated on a
+loopback socket to a daemon you started yourself:
 
 ```bash
 ./vireo-chat -insecure connect localhost:7777
 # warning: -insecure disables certificate verification; the endpoint's identity is not established
 ```
 
-The MCP bridge takes the same flag, as an argument in the host's server config:
+**`-ca` for a setting that might outlive the test.** It trusts one certificate
+and leaves verification on:
+
+```bash
+./vireo-chat -ca certs/cert.pem connect localhost:7777
+```
+
+The MCP bridge takes the same setting, as an argument in the host's server
+config:
 
 ```json
 {
   "mcpServers": {
-    "vireo": { "command": "vireo-mcp", "args": ["-insecure"] }
+    "vireo": { "command": "vireo-mcp", "args": ["-ca", "/abs/path/to/certs/cert.pem"] }
   }
 }
 ```
+
+`-ca` is additive: the system roots are kept, so a public certificate still
+verifies normally. What it buys is that the peer must present a certificate
+signed by that file **and** covering the name you asked for — the same check as
+a public deployment, with one local root instead of the system set. A wrong or
+unrelated certificate is still rejected. It has to be restarted after
+`gen-certs.sh` regenerates the file, since the roots are loaded at startup.
+
+Use `-insecure` as a local convenience, not as a way to make a real endpoint
+work: it turns verification off rather than solving it, so the connection no
+longer establishes who
+answered.
+
+`vireo-mcp` also honours `SSL_CERT_FILE`, which Go reads as the root bundle:
+
+```json
+{
+  "mcpServers": {
+    "vireo": {
+      "command": "vireo-mcp",
+      "env": { "SSL_CERT_FILE": "/abs/path/to/certs/cert.pem" }
+    }
+  }
+}
+```
+
+That works but replaces the system roots for the whole process rather than adding
+to them; prefer `-ca` where the flag is available.
 
 A deployment with a certificate that chains to a public CA needs no flag at all.
 If one deployment needs an exception, implement custom verification or

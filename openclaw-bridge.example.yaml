@@ -1,0 +1,55 @@
+# openclaw-bridge.yaml — an OpenClaw gateway as a vireo backend.
+#
+# This file holds the agent mapping. The gateway token does NOT belong here: it
+# is a secret, and this file is meant to be readable. Supply it through the
+# environment instead:
+#
+#     export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/openclaw.json)"
+#
+# Then, with ./vireo (config/openclaw.yaml) fronting this bridge:
+#
+#     ./openclaw-bridge            # this file, by default
+#     ./vireo --config openclaw    # the daemon, in another terminal
+#
+# The gateway must have the OpenAI-compatible surface enabled (it is off by
+# default):
+#
+#     openclaw config set gateway.http.endpoints.chatCompletions.enabled true
+#
+# That change applies without a restart.
+
+# 18090: clear of fakeagent (:8088), the ZIWA bridge (:8089), and VS Code's own
+# server, which binds 8090-8094 on a developer machine.
+listen: ":18090"
+
+openclaw:
+  base_url: "http://127.0.0.1:18789"
+  # The default target for every agent that does not override it.
+  # `openclaw/default` is the stable alias: it survives a change of the
+  # configured default agent, so it is safe to hardcode.
+  model: "openclaw/default"
+  # Per-request ceiling. A model turn is not instant; keep vireo's call_timeout
+  # in config/openclaw.yaml above this.
+  timeout: "180s"
+
+# The agent used when the webhook names one that is not listed below. Empty
+# means unknown agents are refused with a 404 instead.
+default: "concierge"
+
+# Each key is the vireo agent name — the `agent` field of the webhook payload.
+# `id` is the OpenClaw agent behind it.
+agents:
+  concierge:
+    id: "main"
+    label: "OpenClaw main agent"
+
+  # A second vireo agent on a different OpenClaw agent (create it first):
+  # researcher:
+  #   id: "research"
+  #   label: "Research agent"
+
+  # Or the same OpenClaw agent on a different model target. The gateway picks
+  # the model through the request header this becomes.
+  # quick:
+  #   id: "main"
+  #   model: "openclaw/research"
