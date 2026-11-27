@@ -39,16 +39,16 @@ It is self-signed, valid for `localhost`, `127.0.0.1` and `::1` for ten years.
 ## Why `-insecure` is fine here
 
 The script connects with `-insecure`, and that is the correct choice for a local
-run. What the flag turns off is the check on *who* answered. On a loopback socket
+run. What the flag turns off is the check on _who_ answered. On a loopback socket
 to a daemon started a second ago by the same user, there is no one else to be.
 
 Putting that plainly, because the alternative is worse advice:
 
-| Situation | Right tool | Why |
-| --- | --- | --- |
-| Loopback, your daemon, your machine | `-insecure` | Nothing to authenticate against |
-| Local, but the same config may later point at a real deployment | `-ca` or a public cert | The config outlives the test |
-| Anything shared, networked, or multi-user | `-ca` or a public cert | The peer's identity matters |
+| Situation                                                       | Right tool             | Why                             |
+| --------------------------------------------------------------- | ---------------------- | ------------------------------- |
+| Loopback, your daemon, your machine                             | `-insecure`            | Nothing to authenticate against |
+| Local, but the same config may later point at a real deployment | `-ca` or a public cert | The config outlives the test    |
+| Anything shared, networked, or multi-user                       | `-ca` or a public cert | The peer's identity matters     |
 
 The risk with `-insecure` is **not** the local test. It is that the flag gets
 copied into a config that is later pointed somewhere that matters, and nobody
@@ -72,7 +72,10 @@ For an MCP host, the same thing as an argument:
 ```json
 {
   "mcpServers": {
-    "vireo": { "command": "vireo-mcp", "args": ["-ca", "/abs/path/to/certs/cert.pem"] }
+    "vireo": {
+      "command": "vireo-mcp",
+      "args": ["-ca", "/abs/path/to/certs/cert.pem"]
+    }
   }
 }
 ```
@@ -94,7 +97,7 @@ easy to misread.
   line would still print "digest verified".
 - **Certificate verification is authentication.** It is what binds the connection
   to the endpoint you meant to reach. With it off, the traffic is still encrypted,
-  but only against *whoever answered*.
+  but only against _whoever answered_.
 
 So: locally, `-insecure` costs you nothing real. It just means the "digest
 verified" line no longer implies the peer is the daemon you think it is.

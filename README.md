@@ -206,11 +206,11 @@ is for.
   vireo-chat ──portico/1 (TLS/QUIC, DNS SRV)──▶ vireo ──HTTP POST──▶ backend
 ```
 
-| Component         | Repository                                                                | Runs on                       | Required?                  |
-| ----------------- | ------------------------------------------------------------------------- | ----------------------------- | -------------------------- |
-| `vireo`           | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | the business's infrastructure | yes — it is the endpoint   |
-| `vireo-chat`      | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | any operator's terminal       | optional — a direct client |
-| `vireo-mcp`       | [ground-creative/vireo-mcp](https://github.com/ground-creative/vireo-mcp) | the AI host                   | optional — an MCP adapter  |
+| Component    | Repository                                                                | Runs on                       | Required?                  |
+| ------------ | ------------------------------------------------------------------------- | ----------------------------- | -------------------------- |
+| `vireo`      | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | the business's infrastructure | yes — it is the endpoint   |
+| `vireo-chat` | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | any operator's terminal       | optional — a direct client |
+| `vireo-mcp`  | [ground-creative/vireo-mcp](https://github.com/ground-creative/vireo-mcp) | the AI host                   | optional — an MCP adapter  |
 
 The backends that ship with `vireo` are in the next section. They are
 interchangeable, so this table stops at the parts that are not.
@@ -225,9 +225,9 @@ Bridges live in `bridges/<name>/`, each with its own README — documented next 
 the code, not here, because each needs different things installed and this page
 would grow a section per backend.
 
-| Backend | What it is | Docs |
-| --- | --- | --- |
-| `fakeagent` | canned replies, no model, no key — for testing the daemon | [`cmd/fakeagent`](cmd/fakeagent) |
+| Backend           | What it is                                                      | Docs                                                 |
+| ----------------- | --------------------------------------------------------------- | ---------------------------------------------------- |
+| `fakeagent`       | canned replies, no model, no key — for testing the daemon       | [`cmd/fakeagent`](cmd/fakeagent)                     |
 | `openclaw-bridge` | a real agent through an [OpenClaw](https://openclaw.ai) gateway | [`bridges/openclaw-bridge`](bridges/openclaw-bridge) |
 
 New backends go in `bridges/<name>/` the same way: an HTTP server speaking the
@@ -425,7 +425,10 @@ config:
 ```json
 {
   "mcpServers": {
-    "vireo": { "command": "vireo-mcp", "args": ["-ca", "/abs/path/to/certs/cert.pem"] }
+    "vireo": {
+      "command": "vireo-mcp",
+      "args": ["-ca", "/abs/path/to/certs/cert.pem"]
+    }
   }
 }
 ```

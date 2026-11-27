@@ -20,10 +20,10 @@ vireo-chat ──portico/1──▶ vireo ──webhook──▶ fakeagent
 
 ## Endpoints
 
-| Path | Method | What |
-| --- | --- | --- |
-| `/vireo/message` | POST | the webhook contract; set `Accept: application/x-ndjson` to also get a progress line |
-| `/health` | GET | `{"status":"ok"}` — what `scripts/dev.sh` waits on |
+| Path             | Method | What                                                                                 |
+| ---------------- | ------ | ------------------------------------------------------------------------------------ |
+| `/vireo/message` | POST   | the webhook contract; set `Accept: application/x-ndjson` to also get a progress line |
+| `/health`        | GET    | `{"status":"ok"}` — what `scripts/dev.sh` waits on                                   |
 
 ## Using it
 

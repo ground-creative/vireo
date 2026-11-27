@@ -86,14 +86,14 @@ one OpenClaw agent. For a local test this is all you need.
 
 ### Flags
 
-| Flag | Default | Meaning |
-| --- | --- | --- |
-| `-agent` | `main` | OpenClaw agent id to answer with |
-| `-addr` | `:18090` | listen address |
-| `-gateway` | `http://127.0.0.1:18789` | gateway base URL |
-| `-model` | `openclaw/default` | model target override |
-| `-timeout` | `180s` | per-request ceiling toward the gateway |
-| `-config` | — | optional config file, for multi-agent mapping only |
+| Flag       | Default                  | Meaning                                            |
+| ---------- | ------------------------ | -------------------------------------------------- |
+| `-agent`   | `main`                   | OpenClaw agent id to answer with                   |
+| `-addr`    | `:18090`                 | listen address                                     |
+| `-gateway` | `http://127.0.0.1:18789` | gateway base URL                                   |
+| `-model`   | `openclaw/default`       | model target override                              |
+| `-timeout` | `180s`                   | per-request ceiling toward the gateway             |
+| `-config`  | —                        | optional config file, for multi-agent mapping only |
 
 ### When you need a file
 
@@ -227,30 +227,30 @@ agents:
 
 ### Top level
 
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `listen` | string | `:18090` | address to bind |
-| `default` | string | — | agent used when the webhook names one that is not in `agents`; empty means unknown agents get a 404 |
-| `agents` | map | **required** | vireo agent name → OpenClaw agent |
+| Key       | Type   | Default      | Meaning                                                                                             |
+| --------- | ------ | ------------ | --------------------------------------------------------------------------------------------------- |
+| `listen`  | string | `:18090`     | address to bind                                                                                     |
+| `default` | string | —            | agent used when the webhook names one that is not in `agents`; empty means unknown agents get a 404 |
+| `agents`  | map    | **required** | vireo agent name → OpenClaw agent                                                                   |
 
 ### `openclaw`
 
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `base_url` | string | `http://127.0.0.1:18789` | the gateway's HTTP API (same port as its Control UI) |
-| `token` | string | — | optional; `OPENCLAW_GATEWAY_TOKEN` is preferred. If both are set the **file wins** |
-| `model` | string | `openclaw/default` | default agent target for agents without an override |
-| `timeout` | duration | `180s` | ceiling per request toward the gateway; vireo's `call_timeout` must be **above** it |
+| Key        | Type     | Default                  | Meaning                                                                             |
+| ---------- | -------- | ------------------------ | ----------------------------------------------------------------------------------- |
+| `base_url` | string   | `http://127.0.0.1:18789` | the gateway's HTTP API (same port as its Control UI)                                |
+| `token`    | string   | —                        | optional; `OPENCLAW_GATEWAY_TOKEN` is preferred. If both are set the **file wins**  |
+| `model`    | string   | `openclaw/default`       | default agent target for agents without an override                                 |
+| `timeout`  | duration | `180s`                   | ceiling per request toward the gateway; vireo's `call_timeout` must be **above** it |
 
 ### `agents.<name>`
 
 The key is the `agent` field of the webhook payload, so it must match a `name` in
 your vireo config.
 
-| Key | Type | Meaning |
-| --- | --- | --- |
-| `id` | string | OpenClaw agent id, **required** |
-| `label` | string | human name, logs only |
+| Key     | Type   | Meaning                                   |
+| ------- | ------ | ----------------------------------------- |
+| `id`    | string | OpenClaw agent id, **required**           |
+| `label` | string | human name, logs only                     |
 | `model` | string | target override, e.g. `openclaw/research` |
 
 One bridge serves several vireo agents. Each can point at a different OpenClaw
@@ -340,15 +340,15 @@ without the history being resent.
 
 Every failure names its own fix.
 
-| Message | Cause | Fix |
-| --- | --- | --- |
-| `/v1/models is not served` | surface disabled | the `config set` above |
-| `gateway rejected the token` | token is not `gateway.auth.token` | re-export it |
-| `gateway unreachable at …` | gateway not running | `openclaw gateway run` |
-| `config … not found` | no YAML | it prints the `cp` command |
-| `agent "x" has no openclaw agent id` | `agents.x.id` missing | add the `id` |
-| `default "x" is not one of the configured agents` | `default` names a missing key | fix the name |
-| `unknown field` | typo in the YAML | the error names the key |
+| Message                                           | Cause                             | Fix                        |
+| ------------------------------------------------- | --------------------------------- | -------------------------- |
+| `/v1/models is not served`                        | surface disabled                  | the `config set` above     |
+| `gateway rejected the token`                      | token is not `gateway.auth.token` | re-export it               |
+| `gateway unreachable at …`                        | gateway not running               | `openclaw gateway run`     |
+| `config … not found`                              | no YAML                           | it prints the `cp` command |
+| `agent "x" has no openclaw agent id`              | `agents.x.id` missing             | add the `id`               |
+| `default "x" is not one of the configured agents` | `default` names a missing key     | fix the name               |
+| `unknown field`                                   | typo in the YAML                  | the error names the key    |
 
 At runtime: `404` means the surface was disabled again; `401` means the token
 rotated; `409` means the gateway session is archived (restore it in the Control UI);
@@ -360,11 +360,12 @@ its `call_timeout`.
 ## Tests
 
 ```bash
-go test ./internal/openclaw/
+go test ./bridges/openclaw-bridge/
 ```
 
 The suite pins what must not drift silently: `SessionKey` stability (changing it
 orphans every conversation), turn two carrying the same `user` as turn one, no
 history resent, a stateless turn sending none, the start message reaching the agent,
-ndjson progress, an empty answer becoming an error rather than a blank reply, and
-every startup failure naming its fix.
+ndjson progress, an empty answer becoming an error rather than a blank reply, every
+startup failure naming its fix, and — for the no-config mode — that a missing file
+is not an error while a missing explicit path is.

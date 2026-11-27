@@ -73,11 +73,11 @@ This is not theoretical. With all three at their defaults, a value told to one
 session was recalled by an unrelated one, and the answer cited the other session's
 transcript as its source.
 
-| Feature | Default | What it does | To isolate |
-| --- | --- | --- | --- |
-| `memory.search.rememberAcrossConversations` | on (personal) | `memory_search` recalls other conversations' transcripts | `false` |
-| `tools.sessions.visibility` | `all` | `sessions_search`/`_history` reach **every** session, other users included | `"self"` |
-| `hooks.internal.entries.session-memory.enabled` | on | writes excerpts to a **shared** workspace `MEMORY.md`, which the memory source indexes | `false` |
+| Feature                                         | Default       | What it does                                                                           | To isolate |
+| ----------------------------------------------- | ------------- | -------------------------------------------------------------------------------------- | ---------- |
+| `memory.search.rememberAcrossConversations`     | on (personal) | `memory_search` recalls other conversations' transcripts                               | `false`    |
+| `tools.sessions.visibility`                     | `all`         | `sessions_search`/`_history` reach **every** session, other users included             | `"self"`   |
+| `hooks.internal.entries.session-memory.enabled` | on            | writes excerpts to a **shared** workspace `MEMORY.md`, which the memory source indexes | `false`    |
 
 ```bash
 openclaw config set memory.search.rememberAcrossConversations false --strict-json
@@ -114,24 +114,24 @@ afterwards, or use the dedicated agent.
 
 At bridge startup:
 
-| Message | Cause | Fix |
-| --- | --- | --- |
-| `/v1/models is not served` | surface disabled | the `config set` in step 1 |
-| `gateway rejected the token` | token is not `gateway.auth.token` | re-export it |
-| `gateway unreachable at …` | gateway not running | `openclaw gateway run` |
-| `agent "x" has no openclaw agent id` | `agents.x.id` missing | add the `id` |
-| `default "x" is not one of the configured agents` | `default` names a missing key | fix the name |
+| Message                                           | Cause                             | Fix                        |
+| ------------------------------------------------- | --------------------------------- | -------------------------- |
+| `/v1/models is not served`                        | surface disabled                  | the `config set` in step 1 |
+| `gateway rejected the token`                      | token is not `gateway.auth.token` | re-export it               |
+| `gateway unreachable at …`                        | gateway not running               | `openclaw gateway run`     |
+| `agent "x" has no openclaw agent id`              | `agents.x.id` missing             | add the `id`               |
+| `default "x" is not one of the configured agents` | `default` names a missing key     | fix the name               |
 
 At runtime:
 
-| Message | Meaning |
-| --- | --- |
-| `gateway 404` | the surface was disabled again |
-| `gateway 401` | token rotated; restart the bridge |
-| `gateway 409 [… invalid_request_error]` | the gateway session is archived; restore it in the Control UI |
-| `gateway 503 api_error` | provider overload |
-| `gateway returned an empty answer` | the agent produced no text; surfaced as an error, not a blank reply |
-| `agent run was cancelled` | vireo timed out and cancelled; raise `call_timeout` |
+| Message                                 | Meaning                                                             |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| `gateway 404`                           | the surface was disabled again                                      |
+| `gateway 401`                           | token rotated; restart the bridge                                   |
+| `gateway 409 [… invalid_request_error]` | the gateway session is archived; restore it in the Control UI       |
+| `gateway 503 api_error`                 | provider overload                                                   |
+| `gateway returned an empty answer`      | the agent produced no text; surfaced as an error, not a blank reply |
+| `agent run was cancelled`               | vireo timed out and cancelled; raise `call_timeout`                 |
 
 ## Operating notes
 
@@ -146,6 +146,7 @@ At runtime:
   ```
 
   Node 24 avoids a `node:sqlite` truncation warning that Node 22 prints.
+
 - **The gateway's docs ship locally**, under
   `<npx-dir>/node_modules/openclaw/docs/`:
   `gateway/openai-http-api.md`, `reference/memory-config.md`,

@@ -41,12 +41,12 @@ document.
 Both produce binaries; the split says what kind of thing it is, which is what
 someone browsing the repository needs before opening anything.
 
-| Directory | What lives there | How it is tested |
-| --- | --- | --- |
-| `bridges/` | backends — programs that answer vireo's webhook | with whatever they talk to |
-| `cmd/` | tools — clients, stubs, helpers | nothing external |
-| `internal/` | libraries the above share | unit tests |
-| `.` (root) | the daemon | — |
+| Directory   | What lives there                                | How it is tested           |
+| ----------- | ----------------------------------------------- | -------------------------- |
+| `bridges/`  | backends — programs that answer vireo's webhook | with whatever they talk to |
+| `cmd/`      | tools — clients, stubs, helpers                 | nothing external           |
+| `internal/` | libraries the above share                       | unit tests                 |
+| `.` (root)  | the daemon                                      | —                          |
 
 A bridge is a unit someone adopts, replaces, or writes themselves, so it gets a
 directory of its own with its README, tests and example config together. A tool
@@ -54,12 +54,12 @@ like `vireo-chat` is one file and belongs in `cmd/`.
 
 ## What each binary is
 
-| Binary | What it is | Needed to run the daemon? |
-| --- | --- | --- |
-| `vireo` | the daemon — the endpoint | yes |
-| `vireo-chat` | terminal client for a daemon | no, a client |
-| `fakeagent` | stub backend, canned replies, no model | no, a test backend |
-| `openclaw-bridge` | real backend on an OpenClaw gateway | no, a backend |
+| Binary            | What it is                             | Needed to run the daemon? |
+| ----------------- | -------------------------------------- | ------------------------- |
+| `vireo`           | the daemon — the endpoint              | yes                       |
+| `vireo-chat`      | terminal client for a daemon           | no, a client              |
+| `fakeagent`       | stub backend, canned replies, no model | no, a test backend        |
+| `openclaw-bridge` | real backend on an OpenClaw gateway    | no, a backend             |
 
 Only `vireo` is required. The rest are a client and two interchangeable backends —
 [what a backend is](BACKENDS.md) explains the difference and how to write one.

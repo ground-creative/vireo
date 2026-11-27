@@ -24,7 +24,7 @@ X-Portico-Protocol: portico/1
 ```
 
 ```json
-{"reply":"…","session":{"summary":"one line for the conversation list"}}
+{ "reply": "…", "session": { "summary": "one line for the conversation list" } }
 ```
 
 `initial_assistant_message` is set **only on the first turn** — it is the greeting
@@ -42,10 +42,11 @@ in the [specification](https://github.com/ground-creative/agent-front-door-spec)
 
 Two, and they are deliberately different in kind.
 
-| Backend | Answers with | Use it for |
-| --- | --- | --- |
-| [`fakeagent`](../cmd/fakeagent) | canned text, no model, no key | testing the daemon, the session machinery, the wire |
-| [`openclaw-bridge`](../bridges/openclaw-bridge) | a real agent through an OpenClaw gateway | the smallest complete deployment |
+| Backend                                         | Answers with                             | Use it for                                          |
+| ----------------------------------------------- | ---------------------------------------- | --------------------------------------------------- |
+| [`fakeagent`](../cmd/fakeagent)                 | canned text, no model, no key            | testing the daemon, the session machinery, the wire |
+| [`openclaw-bridge`](../bridges/openclaw-bridge) | a real agent through an OpenClaw gateway | the smallest complete deployment                    |
+
 Both are `cmd/<name>` directories. Adding a third is a new directory and nothing
 else — [`scripts/build.sh`](../scripts/build.sh) discovers it, so no build file,
 README or Dockerfile lists binaries.
@@ -77,12 +78,12 @@ refuses to start.
 ## Configuring vireo for one
 
 ```yaml
-transport: "http://127.0.0.1:8088/vireo/message"   # default, inherited
+transport: "http://127.0.0.1:8088/vireo/message" # default, inherited
 
 agents:
   - name: "concierge"
     description: "Ask anything"
-    sessions: true                                 # keeps a conversation
+    sessions: true # keeps a conversation
 ```
 
 An agent may override `transport` when it lives elsewhere. An agent with
@@ -98,10 +99,10 @@ One daemon can front as many backends as you have agents. `transport` is a
 **default that each agent inherits**, and an agent that overrides it gets its own:
 
 ```yaml
-transport: "http://127.0.0.1:8088/vireo/message"   # most agents
+transport: "http://127.0.0.1:8088/vireo/message" # most agents
 
 agents:
-  - name: "orders"                                 # inherits the default
+  - name: "orders" # inherits the default
     description: "Stub backend, for testing"
 
   - name: "concierge"
