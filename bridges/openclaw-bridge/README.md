@@ -299,11 +299,15 @@ vireo session id ──sha256──▶ "vireo-<32 hex>" ──▶ OpenAI `user` 
 - **A stateless vireo agent sends no `user`**, so the gateway mints a one-shot
   session and nothing carries over.
 
-**Isolation is a gateway-side concern.** Three OpenClaw features share context
-across sessions by default on a personal install. If more than one caller will use
-this, read [`../../docs/OPENCLAW-GATEWAY.md`](../../docs/OPENCLAW-GATEWAY.md#isolation-between-conversations)
-before going further — a value told to one conversation can otherwise be recalled
-by another.
+**Isolation is a gateway-side concern, and it is off by default.** OpenClaw shares
+conversation content across an agent's sessions: the `session-memory` hook writes
+into a shared workspace, and the filesystem and memory tools let the model read it
+back. On a default install one caller can recall what another said — measured, not
+assumed, with the answer citing the file it read.
+
+Two `config set` calls fix it, per agent, without weakening anything else. Do this
+before the endpoint has more than one caller:
+[`../../docs/OPENCLAW-GATEWAY.md#isolation-between-conversations`](../../docs/OPENCLAW-GATEWAY.md#isolation-between-conversations).
 
 ---
 
