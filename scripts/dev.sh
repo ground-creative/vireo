@@ -57,16 +57,13 @@ fi
 
 # --- binaries ----------------------------------------------------------------
 
-build_if_stale() {
-  local out="$1" pkg="$2"
-  if [ ! -x "$out" ] || [ -n "$(find . -name '*.go' -newer "$out" -print -quit 2>/dev/null)" ]; then
-    log "building $out"
-    go build -o "$out" "$pkg" || die "build failed for $out"
-  fi
-}
-
-build_if_stale vireo .
-build_if_stale vireo-chat ./cmd/vireo-chat
+# One build step for the whole repository, so a backend added to cmd/ is built
+# without this script knowing its name. build.sh is incremental enough for the
+# loop: it rebuilds everything, which for this repo is a couple of seconds.
+BIN=bin
+mkdir -p "$BIN"
+log "building binaries into $BIN/"
+./scripts/build.sh "$BIN" >/dev/null || die "build failed (run ./scripts/build.sh to see why)"
 
 # --- child process management ------------------------------------------------
 
@@ -116,11 +113,20 @@ wait_http() {
 
 # --- the backend(s) this config needs ---------------------------------------
 
-case "$cfg_name" in
-  demo)
+# A config names the backend it expects in its own first comment line:
+#
+#   # dev-backend: openclaw
+#
+# That keeps the knowledge in one place — next to the config that needs it —
+# instead of a case statement here that must be extended for every backend the
+# repository gains. A config without the line gets the daemon and client only.
+
+backend="$(sed -n 's/^#[[:space:]]*dev-backend:[[:space:]]*\([a-z0-9-]*\).*/\1/p' "$cfg_path" | head -1)"
+
+case "$backend" in
+  fakeagent)
     log "starting the stub backend (fakeagent on :8088)"
-    build_if_stale fakeagent ./cmd/fakeagent
-    start_child fakeagent ./fakeagent
+    start_child fakeagent "$BIN/fakeagent"
     wait_http http://127.0.0.1:8088/health "fakeagent"
     ;;
 
@@ -149,15 +155,23 @@ case "$cfg_name" in
     fi
 
     log "starting the OpenClaw bridge (:18090)"
-    build_if_stale openclaw-bridge ./cmd/openclaw-bridge
     bridge_cfg=openclaw-bridge.yaml
-    [ -f "$bridge_cfg" ] || bridge_cfg=openclaw-bridge.example.yaml
-    start_child bridge ./openclaw-bridge -config "$bridge_cfg"
+    if [ ! -f "$bridge_cfg" ]; then
+      # The example ships next to the command; use it rather than demanding a
+      # copy for a local run.
+      bridge_cfg=cmd/openclaw-bridge/openclaw-bridge.example.yaml
+      [ -n "$quiet" ] || log "no openclaw-bridge.yaml — using the shipped example"
+    fi
+    start_child bridge "$BIN/openclaw-bridge" -config "$bridge_cfg"
     wait_http http://127.0.0.1:18090/health "the bridge"
     ;;
 
+  "")
+    [ -n "$quiet" ] || log "config '$cfg_name' names no backend (no '# dev-backend:' line) — daemon and client only"
+    ;;
+
   *)
-    [ -n "$quiet" ] || log "config '$cfg_name': no known backend to start — launching the daemon and client only"
+    die "config '$cfg_name' asks for backend '$backend', which this script does not know"
     ;;
 esac
 
@@ -167,7 +181,7 @@ port="$(awk '/^server:/{s=1} s&&/^[[:space:]]+port:/{print $2; exit}' "$cfg_path
 port="${port:-7777}"
 
 log "starting the daemon (vireo --config $cfg_name, port $port)"
-start_child vireo ./vireo --config "$cfg_name"
+start_child vireo "$BIN/vireo" --config "$cfg_name"
 
 # The daemon opens TCP and QUIC on one port; wait for TCP so the client does not
 # race the listener.
@@ -191,7 +205,7 @@ echo
 # outlive the client. Interrupting the client is the normal way to stop the
 # stack, so that exit path is the one that has to work.
 if [ -n "${VIREO_CLIENT_ID:-}" ]; then
-  ./vireo-chat -insecure -id "$VIREO_CLIENT_ID" "localhost:$port"
+  "$BIN/vireo-chat" -insecure -id "$VIREO_CLIENT_ID" "localhost:$port"
 else
-  ./vireo-chat -insecure "localhost:$port"
+  "$BIN/vireo-chat" -insecure "localhost:$port"
 fi

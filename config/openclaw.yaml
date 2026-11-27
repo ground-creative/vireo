@@ -1,5 +1,7 @@
 # vireo config for the OpenClaw-backed endpoint.
 #
+# dev-backend: openclaw
+#
 #   terminal 1:  cd ../openclaw-bridge && OPENCLAW_GATEWAY_TOKEN=... go run .
 #   terminal 2:  cd ../vireo && go run . --config openclaw
 #

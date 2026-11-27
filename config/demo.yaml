@@ -1,5 +1,7 @@
 # vireo configuration — the demo endpoint.
 #
+# dev-backend: fakeagent
+#
 # One endpoint, three agents, one backend (./cmd/fakeagent on :8088).
 #
 # Only files inside config/ are loaded, and --config is required:

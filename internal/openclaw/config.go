@@ -64,7 +64,9 @@ func LoadConfig(path string) (Config, string, error) {
 	}
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return cfg, "", fmt.Errorf("config %s: not found — the agent mapping is configured there", path)
+		// The example ships next to the command, so name it: a first run should
+		// say what to copy rather than only what is missing.
+		return cfg, "", fmt.Errorf("config %s: not found — start from the shipped example:\n\n    cp cmd/openclaw-bridge/openclaw-bridge.example.yaml %s\n\nit needs only the agent mapping; the token comes from %s", path, path, TokenEnvVar)
 	}
 	if err != nil {
 		return cfg, "", fmt.Errorf("config %s: %w", path, err)

@@ -6,16 +6,22 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/vireo . \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/vireo-chat ./cmd/vireo-chat \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/fakeagent ./cmd/fakeagent \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/openclaw-bridge ./cmd/openclaw-bridge
+# Discovered, not listed: every cmd/<name> with a main package, plus the root
+# package as `vireo`. Adding a backend does not change this file.
+RUN for d in cmd/*/; do \
+      [ -d "$d" ] || continue; \
+      name="$(basename "$d")"; \
+      if go list -f '{{.Name}}' "./$d" 2>/dev/null | grep -qx main; then \
+        CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "/out/$name" "./$d" || exit 1; \
+      fi; \
+    done && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/vireo .
 
 # Runtime stage: distroless has no shell, no package manager, runs as nonroot.
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 
-COPY --from=build /out/vireo /out/vireo-chat /out/fakeagent /out/openclaw-bridge /app/
+COPY --from=build /out/ /app/
 COPY certs/ /app/certs/
 COPY config/ /app/config/
 

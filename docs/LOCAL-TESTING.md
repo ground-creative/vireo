@@ -119,5 +119,6 @@ export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/opencla
 ./vireo-chat -insecure connect localhost:7779
 ```
 
-See [`OPENCLAW.md`](OPENCLAW.md) for what the bridge does with sessions, and the
+See [`cmd/openclaw-bridge/README.md`](../cmd/openclaw-bridge/README.md) for what the
+bridge does with sessions, and [`OPENCLAW-GATEWAY.md`](OPENCLAW-GATEWAY.md) for the
 isolation settings a multi-user deployment needs.

@@ -210,9 +210,11 @@ is for.
 | ----------------- | ------------------------------------------------------------------------- | ----------------------------- | -------------------------- |
 | `vireo`           | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | the business's infrastructure | yes — it is the endpoint   |
 | `vireo-chat`      | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | any operator's terminal       | optional — a direct client |
-| `fakeagent`       | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | a development machine         | optional — a stub backend  |
-| `openclaw-bridge` | [ground-creative/vireo](https://github.com/ground-creative/vireo)         | next to an OpenClaw gateway   | optional — a real backend  |
 | `vireo-mcp`       | [ground-creative/vireo-mcp](https://github.com/ground-creative/vireo-mcp) | the AI host                   | optional — an MCP adapter  |
+
+The backends that ship with `vireo`, and what a backend is, are in
+[`docs/BACKENDS.md`](docs/BACKENDS.md) — they are interchangeable and this table is
+not the place to keep counting them.
 
 What follows from that split:
 
@@ -299,29 +301,33 @@ through [vireo-mcp](#connecting-ai-hosts-through-vireo-mcp).
 
 ## Install
 
-Four binaries come from this repository: `vireo`, the daemon, `vireo-chat`, a
-terminal client, `fakeagent`, a stub backend used to test a webhook, and
-`openclaw-bridge`, a **working** backend that answers through an
-[OpenClaw](https://openclaw.ai) gateway — the smallest complete deployment, and
-the one to read if you are writing your own backend
-([docs/OPENCLAW.md](docs/OPENCLAW.md)). The other client, **`vireo-mcp`**, is the
-MCP bridge so an AI host does the talking — it lives in its own repository
-([Connecting AI hosts through Vireo MCP](#connecting-ai-hosts-through-vireo-mcp)).
+One command, and it stays one command however many backends exist:
 
 ```bash
 git clone https://github.com/ground-creative/vireo.git
 cd vireo
+./scripts/build.sh              # every binary → ./bin
 ./scripts/gen-certs.sh          # development certificate; ignored by git
-go build -o vireo .
-go build -o vireo-chat ./cmd/vireo-chat
-go build -o fakeagent  ./cmd/fakeagent
-go build -o openclaw-bridge ./cmd/openclaw-bridge   # optional: needs a gateway
 ```
 
 `vireo` is the daemon and nothing else is needed to run it: no AI, no model, no
 API key. It forwards each turn to whatever `transport` names.
 
-Docker builds the same binary. Certificates are not in the image — mount a pair
+`build.sh` discovers the binaries in `cmd/` rather than listing them, so adding a
+backend never means editing a build file, this README, or the Dockerfile. What it
+produces, and the one exception (the daemon is the root package), is in
+[`docs/BUILDING.md`](docs/BUILDING.md).
+
+To use a real backend instead of the stub, add
+[`openclaw-bridge`](cmd/openclaw-bridge) — it has its own setup, because it needs a
+gateway:
+
+```bash
+export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/openclaw.json)"
+./scripts/dev.sh --config openclaw
+```
+
+Docker builds the same set. Certificates are not in the image — mount a pair
 (generated with `./scripts/gen-certs.sh`, or your own) over `/app/certs`:
 
 ```bash
@@ -679,10 +685,18 @@ are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md#cancelling-a-turn).
   implement something; it is written to be followed without reading this code.
 - [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — every key of this daemon,
   defaults, inheritance, startup validation, and how config maps to the manifest
+- [`docs/BACKENDS.md`](docs/BACKENDS.md) — what a backend is, the webhook contract,
+  and how to write one
+- [`docs/BUILDING.md`](docs/BUILDING.md) — what `scripts/build.sh` produces, and why
+  there is no list of binaries to maintain
+- [`docs/LOCAL-TESTING.md`](docs/LOCAL-TESTING.md) — `scripts/dev.sh`, why a
+  certificate exists locally, and when to use `-insecure` rather than `-ca`
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — build, Docker, certificates,
   install, firewall, DNS, systemd, operations
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — how this daemon speaks `portico/1`
-- [`vireo-mcp`](https://github.com/ground-creative/vireo-mcp) — the MCP bridge,
+- [`cmd/openclaw-bridge`](cmd/openclaw-bridge) — a real backend, with its config
+  reference; [`docs/OPENCLAW-GATEWAY.md`](docs/OPENCLAW-GATEWAY.md) — the gateway
+  side, including the settings a multi-user deployment needs- [`vireo-mcp`](https://github.com/ground-creative/vireo-mcp) — the MCP bridge,
   its host setup, transports, identity and tokens
 
 The protocol is the part that needs other people. If you are building an AI

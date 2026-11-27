@@ -3,15 +3,20 @@ config/*
 !config/demo.yaml
 !config/openclaw.yaml
 
-# The bridge config may carry a gateway token; only the example ships.
-openclaw-bridge.yaml
-!openclaw-bridge.example.yaml
+# The bridge config may carry a gateway token; only the example ships. The
+# example lives next to the command, so it travels with the code it configures.
+/openclaw-bridge.yaml
+!cmd/openclaw-bridge/openclaw-bridge.example.yaml
 
 # Runtime session envelopes are ignored; .gitkeep keeps the folder in the repo.
 sessions/*
 !sessions/.gitkeep
 
-# Binaries built in place with `go build -o ...`.
+# Every binary goes to bin/, which scripts/build.sh creates.
+/bin/
+
+# Binaries built in place with `go build -o ...` — still ignored so a stray
+# build does not get committed. None of these is listed in a build file.
 /vireo
 /vireo-chat
 /fakeagent
