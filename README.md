@@ -30,9 +30,71 @@ README:
 | **`portico/1`**      | The concrete wire protocol implemented here today                                       | [`docs/PROTOCOL.md`](docs/PROTOCOL.md)                                            |
 | **Vireo**            | The Go daemon and clients that demonstrate the architecture                             | this repository                                                                   |
 
+Two adapters wrap those, and neither is the protocol: a **backend adapter**
+(`openclaw-bridge`) connects an agent you already run, and the **MCP bridge**
+(`vireo-mcp`) connects an MCP-speaking host.
+
+Where to go first: [put an existing agent behind a door](#already-running-an-ai-agent-put-it-behind-a-door) ·
+[try it live](#try-it-now) · [build and run](#install) · [contribute](#contributing)
+
 Vireo is a starting point for that effort, not the owner of the proposed standard.
 This daemon is one working implementation of the specification, and the protocol
 it speaks is not a ratified one.
+
+## Already running an AI agent? Put it behind a door.
+
+If you already have an agent — a model with tools, a workflow engine, a support bot
+— you do not need to rewrite it, wrap it in MCP, or teach it a new protocol. Run
+`vireo` in front of it and write one small HTTP handler that answers a turn.
+
+For OpenClaw there is a working backend you can use as-is, or copy as a template
+([build it first](#install)):
+
+```bash
+export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/openclaw.json)"
+./bin/openclaw-bridge -agent main
+```
+
+→ [`bridges/openclaw-bridge/README.md`](bridges/openclaw-bridge/README.md)
+
+The bridge is a **backend adapter**: it implements the interface between `vireo`
+and an existing agent runtime. It is not an MCP server, and it does not modify or
+configure OpenClaw's own behaviour — it translates vireo's webhook into the
+gateway's Chat Completions endpoint and back, so your agent runs exactly as it
+does today. Any runtime works the same way; the contract is
+[`docs/BACKENDS.md`](docs/BACKENDS.md).
+
+## Try it now
+
+You do not need to deploy anything to see the protocol work. Two live paths:
+
+**From a terminal** — a real endpoint is already running at `ziwa.ai`:
+
+```bash
+./vireo-chat connect ziwa.ai
+```
+
+Discovery resolves `_portico._tcp.ziwa.ai`, the daemon returns its manifest, and
+you pick an agent and talk. Follow-up messages continue the same session rather
+than starting over. [`vireo-chat` is built in a moment](#install).
+
+**From an MCP-speaking AI host** — Claude Desktop, Cursor, VS Code. Register the
+bridge once ([details](#connecting-ai-hosts-through-vireo-mcp)):
+
+```json
+{
+  "mcpServers": {
+    "vireo": { "command": "vireo-mcp" }
+  }
+}
+```
+
+Then ask the host to `connect` to `ziwa.ai`. It resolves the domain, reads the
+manifest, lists the agents the endpoint publishes, and drives a conversation
+through `send_message`. Nothing to install on the business side.
+
+Same endpoint, same protocol, two different clients — that is the point of the
+split below.
 
 ## The problem
 
@@ -238,17 +300,20 @@ discovers it. What separates `bridges/` from `cmd/` is in
 
 ## Integrations
 
-Things that talk to vireo or define what it speaks, outside this repository.
+The pieces a developer coming here usually needs next, and where each of them
+lives.
 
-| Integration | What it is |
-| --- | --- |
-| [OpenClaw bridge](https://github.com/ground-creative/vireo/tree/main/bridges/openclaw-bridge) | A backend adapter that answers through an [OpenClaw](https://openclaw.ai) gateway. The shortest route to a vireo endpoint that returns real answers, and the one to copy when writing your own. Source is in this repository, under [`bridges/openclaw-bridge`](bridges/openclaw-bridge). |
-| [Agent Front Door specification](https://github.com/ground-creative/agent-front-door-spec) | The normative documents `portico/1` is defined by: the manifest, the wire protocol, conformance levels, security requirements, plus the fixtures and probes used to check them. Start here to build a daemon in another language or a client that is not MCP. |
+| Integration | What it is | Where |
+| --- | --- | --- |
+| **OpenClaw bridge** | A **backend adapter** for an existing agent runtime: it answers vireo's webhook by calling an OpenClaw gateway, so an agent you already run becomes reachable over `portico/1`. Setup, config and isolation notes. | [`bridges/openclaw-bridge/README.md`](bridges/openclaw-bridge/README.md) · gateway side in [`docs/OPENCLAW-GATEWAY.md`](docs/OPENCLAW-GATEWAY.md) |
+| **MCP bridge** | `vireo-mcp` connects an MCP-compatible AI host to a daemon. An adapter on the host side, not part of the protocol. | [ground-creative/vireo-mcp](https://github.com/ground-creative/vireo-mcp#readme) |
+| **Agent Front Door specification** | The normative documents: the manifest, the wire protocol, conformance levels, security requirements, the fixtures and the probes that check them. Start here to implement the protocol in another language. | [ground-creative/agent-front-door-spec](https://github.com/ground-creative/agent-front-door-spec) |
 
-The distinction matters: the specification is the contract, an adapter is one
-program that satisfies part of it. `vireo` implements the server side; an adapter
-like `openclaw-bridge` implements the backend side of vireo's own webhook and
-speaks nothing of `portico/1` itself.
+Keeping these apart is what the terminology above is for. `portico/1` is the
+protocol; `vireo` is one implementation of it; a **backend adapter** sits behind a
+daemon and speaks only vireo's webhook, never `portico/1`; an **MCP bridge** sits in
+front of a daemon and speaks MCP to the host, `portico/1` to the daemon. Neither
+adapter is an implementation of the protocol, and neither is a requirement.
 
 What follows from the split between daemon, client and backend:
 
@@ -318,20 +383,6 @@ Yes — everything north of the river, with same-day slots before 11am.
 Then keep asking: the conversation is a session, so a follow-up carries the
 thread instead of starting over. Swap the agents for a restaurant, a clinic or a
 booking desk and the shape is the same — the answers come from the business.
-
-## Live demo
-
-[ziwa.ai](https://ziwa.ai) is a real endpoint, already running — nothing to
-install on the business side. With a client built in the next section, one
-command:
-
-```bash
-./vireo-chat connect ziwa.ai
-```
-
-`connect ziwa.ai` resolves through `_portico._tcp.ziwa.ai`, lists what that
-endpoint publishes today, and opens a session. From an AI host, the same host name
-through [vireo-mcp](#connecting-ai-hosts-through-vireo-mcp).
 
 ## Install
 
@@ -704,12 +755,70 @@ Turns run concurrently, so the read loop stays free while a call is in flight �
 that is what makes a cancel frame readable at all. Details and the frame layout
 are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md#cancelling-a-turn).
 
-## Documentation and contributing
+## Contributing
 
-- [`agent-front-door-spec`](https://github.com/ground-creative/agent-front-door-spec) —
-  **the specification**: the manifest object, the wire protocol, conformance levels,
-  security considerations, schema and fixtures. Start here if you want to
-  implement something; it is written to be followed without reading this code.
+Three different things count as contributing, and they need very different amounts
+of effort. You do not have to implement the specification to be useful here.
+
+### 1. Backend adapters — expose an agent runtime you already have
+
+The lowest-cost, highest-value path. Take an existing agent — a framework, a
+workflow engine, an internal service — and write the small HTTP handler that
+answers vireo's webhook. That single file makes the agent reachable over
+`portico/1` without touching the daemon, the protocol, or the agent's own logic.
+
+[`openclaw-bridge`](bridges/openclaw-bridge) is the reference example and a
+working template: about seven hundred lines across three files, one non-stdlib
+dependency (`yaml.v3`), and 26 tests. Copy its shape, or run it first to see the
+contract behave.
+
+- contract: [`docs/BACKENDS.md`](docs/BACKENDS.md)
+- reference adapter: [`bridges/openclaw-bridge/README.md`](bridges/openclaw-bridge/README.md)
+- several backends behind one daemon: [`docs/BACKENDS.md#several-backends-at-once`](docs/BACKENDS.md#several-backends-at-once)
+
+This is an adapter, not an implementation of the protocol. It is listed separately
+in the specification's
+[`IMPLEMENTATIONS.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/IMPLEMENTATIONS.md)
+for that reason.
+
+### 2. Independent clients — implement `portico/1` in another language
+
+A client that talks to a daemon without reusing this code is the strongest evidence
+the protocol is implementable from the text. Any language, any runtime.
+
+Start from the normative documents and check your work against the live endpoint:
+
+- specification: [`PROTOCOL.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/normative/PROTOCOL.md) and [`MANIFEST.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/normative/MANIFEST.md)
+- conformance probe, sharing no code with vireo:
+  `python3 machine/conformance.py --endpoint vireo.ziwa.ai:7778 --server-name ziwa.ai`
+- `vireo-chat` is a client written against the protocol for reference —
+  [`cmd/vireo-chat`](cmd/vireo-chat)
+
+### 3. Independent daemons — serve a domain of your own
+
+A daemon that is not this one, exposing agents you operate, is the other half of
+interoperability. The conformance ladder in
+[`normative/CONFORMANCE.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/normative/CONFORMANCE.md)
+says what to reach for and in what order; partial levels are legitimate and are
+expected.
+
+### Before you write anything
+
+Try the two live paths in [Try it now](#try-it-now) and read
+[`docs/BACKENDS.md`](docs/BACKENDS.md). If something was unclear, that is a defect
+worth an issue — the specification's
+[`CONTRIBUTING.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/CONTRIBUTING.md)
+explains what makes a useful report, and
+[`GOVERNANCE.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/GOVERNANCE.md)
+covers how decisions are made.
+
+Conformance claims go in
+[`IMPLEMENTATIONS.md`](https://github.com/ground-creative/agent-front-door-spec/blob/main/IMPLEMENTATIONS.md)
+of the specification repository, as a pull request with a row: project, language,
+role, level, spec release, and how a third party reproduces the check.
+
+### Reference for this repository
+
 - [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — every key of this daemon,
   defaults, inheritance, startup validation, and how config maps to the manifest
 - [`docs/BACKENDS.md`](docs/BACKENDS.md) — what a backend is, the webhook contract,
@@ -721,9 +830,10 @@ are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md#cancelling-a-turn).
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — build, Docker, certificates,
   install, firewall, DNS, systemd, operations
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — how this daemon speaks `portico/1`
-- [`bridges/openclaw-bridge`](bridges/openclaw-bridge) — a real backend, with its config
-  reference; [`docs/OPENCLAW-GATEWAY.md`](docs/OPENCLAW-GATEWAY.md) — the gateway
-  side, including the settings a multi-user deployment needs- [`vireo-mcp`](https://github.com/ground-creative/vireo-mcp) — the MCP bridge,
+- [`bridges/openclaw-bridge`](bridges/openclaw-bridge) — a real backend, with its
+  config reference; [`docs/OPENCLAW-GATEWAY.md`](docs/OPENCLAW-GATEWAY.md) — the
+  gateway side, including the settings a multi-user deployment needs
+- [`vireo-mcp`](https://github.com/ground-creative/vireo-mcp) — the MCP bridge,
   its host setup, transports, identity and tokens
 
 The protocol is the part that needs other people. If you are building an AI
