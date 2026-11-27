@@ -22,6 +22,10 @@ const TokenEnvVar = "OPENCLAW_GATEWAY_TOKEN"
 // (8088 is fakeagent; VS Code's own server takes 8090-8094).
 const DefaultListen = ":18090"
 
+// DefaultConfigFile is read when it exists and -config was not given. Its absence
+// is normal, not an error: the bridge runs on flags and defaults without it.
+const DefaultConfigFile = "openclaw-bridge.yaml"
+
 // fileConfig is the shape of openclaw-bridge.yaml. listen and the agents map
 // belong to the bridge; the openclaw block holds the gateway settings.
 type fileConfig struct {
@@ -48,8 +52,15 @@ type fileAgent struct {
 }
 
 // LoadConfig reads the bridge config and returns it with the listen address.
-// The file holds the mapping; the token may come from the file or from
-// OPENCLAW_GATEWAY_TOKEN.
+//
+// The file is OPTIONAL. With no file the bridge runs on defaults plus whatever
+// flags set, which is the intended first experience: the only thing that cannot
+// be guessed is which OpenClaw agent to use, and -agent supplies that. A file is
+// for the cases flags cannot express — several vireo agents mapped to different
+// OpenClaw agents.
+//
+// A path that was given explicitly and does not exist is still an error: a typo
+// should not silently fall back to defaults.
 func LoadConfig(path string) (Config, string, error) {
 	cfg := Config{
 		BaseURL: DefaultGatewayURL,
@@ -60,13 +71,18 @@ func LoadConfig(path string) (Config, string, error) {
 
 	path = strings.TrimSpace(path)
 	if path == "" {
-		path = "openclaw-bridge.yaml"
+		// No path: try the conventional name, but absence is not an error.
+		if _, err := os.Stat(DefaultConfigFile); err == nil {
+			path = DefaultConfigFile
+		} else {
+			cfg.Token = strings.TrimSpace(os.Getenv(TokenEnvVar))
+			return cfg, listen, nil
+		}
 	}
+
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		// The example ships next to the command, so name it: a first run should
-		// say what to copy rather than only what is missing.
-		return cfg, "", fmt.Errorf("config %s: not found — start from the shipped example:\n\n    cp bridges/openclaw-bridge/openclaw-bridge.example.yaml %s\n\nit needs only the agent mapping; the token comes from %s", path, path, TokenEnvVar)
+		return cfg, "", fmt.Errorf("config %s: not found — drop -config to run on flags and defaults, or pass -agent <openclaw-agent-id>", path)
 	}
 	if err != nil {
 		return cfg, "", fmt.Errorf("config %s: %w", path, err)

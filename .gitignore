@@ -3,10 +3,11 @@
 config/*
 !config/demo.yaml
 
-# The bridge config may carry a gateway token; only the example ships. The
-# example lives next to the command, so it travels with the code it configures.
+# A bridge config may carry a gateway token, so it is never committed. The
+# example lives in examples/, outside the Go package, because a bridge needs no
+# config file at all — a file is only for mapping several agents.
 /openclaw-bridge.yaml
-!cmd/openclaw-bridge/openclaw-bridge.example.yaml
+/dev-openclaw.yaml
 
 # Runtime session envelopes are ignored; .gitkeep keeps the folder in the repo.
 sessions/*

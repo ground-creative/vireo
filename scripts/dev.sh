@@ -212,14 +212,10 @@ case "${backend:-}" in
     fi
 
     log "starting the OpenClaw bridge (:18090)"
-    # A local override wins; otherwise the example next to the command is used,
-    # so a first run needs no copy step.
-    bridge_cfg=openclaw-bridge.yaml
-    if [ ! -f "$bridge_cfg" ]; then
-      bridge_cfg=bridges/openclaw-bridge/openclaw-bridge.example.yaml
-      [ -n "$quiet" ] || log "no openclaw-bridge.yaml — using the shipped example"
-    fi
-    start_child bridge "$BIN/openclaw-bridge" -config "$bridge_cfg"
+    # No bridge config file: one agent is a flag. A YAML is only for mapping
+    # several vireo agents to different OpenClaw agents, which a local single-agent
+    # test does not need.
+    start_child bridge "$BIN/openclaw-bridge" -agent "${OPENCLAW_AGENT:-main}"
     wait_http http://127.0.0.1:18090/health "the bridge"
     ;;
 

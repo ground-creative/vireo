@@ -68,45 +68,77 @@ access to the gateway. Keep it in the environment, not in a file you might commi
 
 ## Run
 
-```bash
-cd vireo
-./bin/openclaw-bridge              # reads ./openclaw-bridge.yaml
-```
-
-With no config file it refuses to start and prints the copy command. To get one:
+**No config file.** The one thing that cannot be guessed is which OpenClaw agent
+to use, and that is a flag:
 
 ```bash
-cp bridges/openclaw-bridge/openclaw-bridge.example.yaml openclaw-bridge.yaml
-./bin/openclaw-bridge
+export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/openclaw.json)"
+./bin/openclaw-bridge -agent main
 ```
 
-Expected output:
-
 ```
-openclaw bridge listening on :18090 (POST /vireo/message, gateway http://127.0.0.1:18789, agents: concierge (OpenClaw main agent))
+openclaw bridge listening on :18090 (POST /vireo/message, gateway http://127.0.0.1:18789, agents: any → main)
 token source: OPENCLAW_GATEWAY_TOKEN (environment)
 ```
 
-Then point vireo at it. In another terminal:
+`any → main` is the whole configuration: every vireo agent name resolves to that
+one OpenClaw agent. For a local test this is all you need.
+
+### Flags
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `-agent` | `main` | OpenClaw agent id to answer with |
+| `-addr` | `:18090` | listen address |
+| `-gateway` | `http://127.0.0.1:18789` | gateway base URL |
+| `-model` | `openclaw/default` | model target override |
+| `-timeout` | `180s` | per-request ceiling toward the gateway |
+| `-config` | — | optional config file, for multi-agent mapping only |
+
+### When you need a file
+
+Only for what flags cannot express: **several vireo agent names mapped to
+different OpenClaw agents**. Copy the example, which lives outside the source
+tree because it is a deployment artifact, not code:
 
 ```bash
-./bin/vireo --config demo          # demo.yaml's transport is fakeagent, so edit it,
-                                   # or use the one-command path below
+cp examples/openclaw-bridge.yaml openclaw-bridge.yaml   # from the repo root
+./bin/openclaw-bridge            # picks up ./openclaw-bridge.yaml when present
+```
+
+`config.go` reads it from the working directory only; there is no search path and
+no implicit copy step.
+
+### Wiring vireo to it
+
+```yaml
+# config/mine.yaml
+transport: "http://127.0.0.1:18090/vireo/message"
+agents:
+  - name: "concierge"
+    description: "Ask the local OpenClaw agent anything"
+```
+
+```bash
+./bin/vireo --config mine
 ./bin/vireo-chat -insecure connect localhost:7777
 ```
 
-### The one-command way
+The agent `name` in that vireo config is the `agent` field the bridge receives.
+With `-agent` (no mapping) it is ignored — every name maps to the same OpenClaw
+agent. With a mapping file it must match a key.
 
-`scripts/dev.sh --backend openclaw` writes a matching vireo config for you, starts
-the gateway if needed, the bridge, the daemon, and the client, and removes the
-config on exit:
+### The one-command way
 
 ```bash
 ./scripts/dev.sh --backend openclaw
 ```
 
-Use this for a local test. Use the explicit sequence above when you are wiring a
-real deployment, where the vireo config is yours to write.
+Starts the gateway if it is not already up, the bridge (flags only), the daemon,
+and the client, and stops everything on exit. `OPENCLAW_AGENT` overrides the agent.
+
+Use this for a local test. Use the explicit sequence above when wiring a real
+deployment, where the vireo config is yours to write.
 
 ### If the gateway is already running
 
@@ -123,11 +155,11 @@ the repository, so the bridge is already there — only the entrypoint differs:
 ```bash
 docker build -t vireo .
 
+# No config file: the agent is a flag.
 docker run --rm --network host \
   -e OPENCLAW_GATEWAY_TOKEN \
-  -v "$PWD/openclaw-bridge.yaml:/app/openclaw-bridge.yaml:ro" \
   --entrypoint /app/openclaw-bridge \
-  vireo -config /app/openclaw-bridge.yaml
+  vireo -agent main
 ```
 
 **`--network host` is not optional.** The OpenClaw gateway binds `127.0.0.1:18789`
@@ -173,9 +205,10 @@ maintain a build per backend, which is what `scripts/build.sh` exists to avoid.
 
 ## Config reference
 
-Taken by `-config`, default `openclaw-bridge.yaml` in the working directory.
-Unknown keys are **rejected**, so a typo fails at startup rather than being
-silently ignored.
+**Optional.** Only read when `-config` names a file, or when
+`openclaw-bridge.yaml` exists in the working directory. Nothing here is required
+for a single-agent run — the flags cover that. Unknown keys are **rejected**, so a
+typo fails at startup rather than being silently ignored.
 
 ```yaml
 listen: ":18090"

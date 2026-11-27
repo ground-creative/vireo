@@ -1,17 +1,18 @@
 // Command openclaw-bridge runs an OpenClaw gateway as a vireo backend.
 //
-// It is a backend in exactly the sense cmd/fakeagent is: it speaks vireo's
-// webhook contract. The difference is what answers — an OpenClaw agent through
-// the gateway's OpenAI-compatible Chat Completions endpoint, rather than canned
-// text.
+// It speaks vireo's webhook contract and answers through the gateway's
+// OpenAI-compatible Chat Completions endpoint:
 //
 //	vireo  ──webhook──▶  openclaw-bridge  ──/v1/chat/completions──▶  openclaw-gateway
 //
-// One bridge serves as many vireo agents as you configure: each vireo agent name
-// maps to its own OpenClaw agent.
+// No config file is required. The only thing that cannot be guessed is which
+// OpenClaw agent to use, and -agent supplies it:
 //
-//	openclaw-bridge.yaml      agent mapping, gateway URL, optional token
-//	OPENCLAW_GATEWAY_TOKEN    the gateway token, if not in the file
+//	export OPENCLAW_GATEWAY_TOKEN=...
+//	./openclaw-bridge -agent main
+//
+// A YAML file is for what flags cannot express: several vireo agents mapped to
+// different OpenClaw agents. See the README.
 //
 // Sessions: vireo mints the id, the bridge hashes it into the OpenAI `user`
 // value, and the gateway keeps the history. Nothing is resent between turns.
@@ -26,8 +27,13 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "openclaw-bridge.yaml", "bridge config file (it holds the agent mapping)")
-	addr := flag.String("addr", "", "listen address, overrides the config file (default :18090)")
+	// Flags mirror the config file, so a local run needs no file at all.
+	agent := flag.String("agent", "main", "OpenClaw agent id to answer with; every vireo agent name resolves to it")
+	addr := flag.String("addr", DefaultListen, "listen address")
+	gateway := flag.String("gateway", "", "gateway base URL (default "+DefaultGatewayURL+")")
+	model := flag.String("model", "", "model target override (default "+DefaultModel+")")
+	timeout := flag.Duration("timeout", 0, "per-request ceiling toward the gateway (default 180s)")
+	configPath := flag.String("config", "", "config file; optional, and only needed to map several vireo agents")
 	flag.Parse()
 
 	cfg, listen, err := LoadConfig(*configPath)
@@ -36,6 +42,22 @@ func main() {
 	}
 	if strings.TrimSpace(*addr) != "" {
 		listen = strings.TrimSpace(*addr)
+	}
+
+	// Flags fill in what an absent config file left unset. A config file that
+	// maps agents wins for that mapping; the flags still override the connection
+	// details, so a one-off run can point somewhere else without editing a file.
+	if len(cfg.Agents) == 0 {
+		cfg.DefaultAgent = strings.TrimSpace(*agent)
+	}
+	if *gateway != "" {
+		cfg.BaseURL = strings.TrimSpace(*gateway)
+	}
+	if *model != "" {
+		cfg.Model = strings.TrimSpace(*model)
+	}
+	if *timeout > 0 {
+		cfg.Timeout = *timeout
 	}
 
 	bridge, err := New(cfg)
@@ -58,5 +80,8 @@ func tokenSource(path string) string {
 	if v := strings.TrimSpace(os.Getenv(TokenEnvVar)); v != "" {
 		return TokenEnvVar + " (environment)"
 	}
-	return "config file " + path
+	if path != "" {
+		return "config file " + path
+	}
+	return "none"
 }

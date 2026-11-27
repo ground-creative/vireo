@@ -65,6 +65,12 @@ type Config struct {
 	// Default names the agent used when the payload's agent is not in Agents.
 	// Empty means unknown agents are refused.
 	Default string
+
+	// DefaultAgent is the OpenClaw agent used when no mapping is configured at
+	// all. It is what makes a config file optional: `-agent main` sets this and
+	// the bridge becomes a single-agent bridge, every vireo agent name resolving
+	// to that one id.
+	DefaultAgent string
 }
 
 // Agent is one OpenClaw agent behind a vireo agent name.
@@ -115,8 +121,8 @@ func New(cfg Config) (*Bridge, error) {
 			return nil, fmt.Errorf("openclaw: default %q is not one of the configured agents", cfg.Default)
 		}
 	}
-	if len(agents) == 0 {
-		return nil, fmt.Errorf("openclaw: no agents configured — list them under `agents` in the config file")
+	if len(agents) == 0 && strings.TrimSpace(cfg.DefaultAgent) == "" {
+		return nil, fmt.Errorf("openclaw: no agent mapping — pass -agent <openclaw-agent-id> for a single agent, or list agents in a config file")
 	}
 
 	if cfg.Timeout <= 0 {
@@ -197,12 +203,27 @@ func (b *Bridge) AgentFor(agent string) (Agent, bool) {
 			return a, true
 		}
 	}
+	// No mapping configured: the bridge is a single-agent bridge and every vireo
+	// agent name resolves to that one OpenClaw agent. This is what makes
+	// `./openclaw-bridge -agent main` work with no config file at all — the
+	// common local case, and the shape most people start with.
+	if len(b.cfg.Agents) == 0 && strings.TrimSpace(b.cfg.DefaultAgent) != "" {
+		return Agent{ID: b.cfg.DefaultAgent, Label: b.cfg.DefaultAgent}, true
+	}
 	return Agent{}, false
 }
 
 // AgentNames returns "agent" or "agent (label)" per configured agent, sorted,
 // for the startup log.
 func (b *Bridge) AgentNames() []string {
+	// No mapping: one OpenClaw agent answers every vireo agent name. Say so,
+	// rather than logging an empty list that looks like a misconfiguration.
+	if len(b.cfg.Agents) == 0 {
+		if id := strings.TrimSpace(b.cfg.DefaultAgent); id != "" {
+			return []string{"any → " + id}
+		}
+		return nil
+	}
 	names := make([]string, 0, len(b.cfg.Agents))
 	for name, a := range b.cfg.Agents {
 		if a.Label != "" {

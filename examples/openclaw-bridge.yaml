@@ -1,0 +1,43 @@
+# examples/openclaw-bridge.yaml — only needed for more than one agent.
+#
+# You do NOT need this file to run the bridge. A single agent is one flag:
+#
+#     export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/openclaw.json)"
+#     ./openclaw-bridge -agent main
+#
+# Copy this only when several vireo agent names must resolve to DIFFERENT OpenClaw
+# agents, which flags cannot express:
+#
+#     cp examples/openclaw-bridge.yaml openclaw-bridge.yaml
+#     ./openclaw-bridge            # picks up ./openclaw-bridge.yaml when present
+#
+# The token stays out of the file: it is the gateway's operator credential. Use
+# OPENCLAW_GATEWAY_TOKEN unless this is a throwaway local setup.
+
+listen: ":18090"
+
+openclaw:
+  base_url: "http://127.0.0.1:18789"
+  model: "openclaw/default"
+  timeout: "180s"
+
+# The agent used when a webhook names one that is not listed below. Omit it to
+# make unknown agents a 404 instead.
+default: "concierge"
+
+# Each key is the vireo agent name — the `agent` field of the webhook payload, so
+# it must match a `name` in the vireo config. `id` is the OpenClaw agent.
+agents:
+  concierge:
+    id: "main"
+    label: "OpenClaw main agent"
+
+  # A second vireo agent on a different OpenClaw agent (create it first):
+  # researcher:
+  #   id: "research"
+  #   label: "Research agent"
+
+  # Or the same OpenClaw agent on a different model target:
+  # quick:
+  #   id: "main"
+  #   model: "openclaw/research"
