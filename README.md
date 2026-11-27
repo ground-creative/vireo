@@ -236,6 +236,20 @@ in this repository changes to add one — [`scripts/build.sh`](scripts/build.sh)
 discovers it. What separates `bridges/` from `cmd/` is in
 [`docs/BUILDING.md`](docs/BUILDING.md#cmd-versus-bridges).
 
+## Integrations
+
+Things that talk to vireo or define what it speaks, outside this repository.
+
+| Integration | What it is |
+| --- | --- |
+| [OpenClaw bridge](https://github.com/ground-creative/vireo/tree/main/bridges/openclaw-bridge) | A backend adapter that answers through an [OpenClaw](https://openclaw.ai) gateway. The shortest route to a vireo endpoint that returns real answers, and the one to copy when writing your own. Source is in this repository, under [`bridges/openclaw-bridge`](bridges/openclaw-bridge). |
+| [Agent Front Door specification](https://github.com/ground-creative/agent-front-door-spec) | The normative documents `portico/1` is defined by: the manifest, the wire protocol, conformance levels, security requirements, plus the fixtures and probes used to check them. Start here to build a daemon in another language or a client that is not MCP. |
+
+The distinction matters: the specification is the contract, an adapter is one
+program that satisfies part of it. `vireo` implements the server side; an adapter
+like `openclaw-bridge` implements the backend side of vireo's own webhook and
+speaks nothing of `portico/1` itself.
+
 What follows from the split between daemon, client and backend:
 
 - **The wire protocol is independent of MCP.** `portico/1` is the contract between
