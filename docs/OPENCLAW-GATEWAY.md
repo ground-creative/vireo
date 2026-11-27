@@ -1,11 +1,11 @@
 # OpenClaw gateway setup
 
 What has to be true on the **gateway** side for
-[`openclaw-bridge`](../cmd/openclaw-bridge) to work, and what it must be told to
+[`openclaw-bridge`](../bridges/openclaw-bridge) to work, and what it must be told to
 keep conversations apart.
 
 The bridge itself — its config, its session mapping, what it does not do — is
-documented next to the code: [`cmd/openclaw-bridge/README.md`](../cmd/openclaw-bridge/README.md).
+documented next to the code: [`bridges/openclaw-bridge/README.md`](../bridges/openclaw-bridge/README.md).
 
 ## 1. Enable the OpenAI-compatible surface
 

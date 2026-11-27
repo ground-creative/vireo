@@ -30,7 +30,7 @@ cd vireo
 That builds every binary in the repository. If you want only this one:
 
 ```bash
-go build -o bin/openclaw-bridge ./cmd/openclaw-bridge
+go build -o bin/openclaw-bridge ./bridges/openclaw-bridge
 ```
 
 ---
@@ -76,7 +76,7 @@ cd vireo
 With no config file it refuses to start and prints the copy command. To get one:
 
 ```bash
-cp cmd/openclaw-bridge/openclaw-bridge.example.yaml openclaw-bridge.yaml
+cp bridges/openclaw-bridge/openclaw-bridge.example.yaml openclaw-bridge.yaml
 ./bin/openclaw-bridge
 ```
 
@@ -112,6 +112,62 @@ real deployment, where the vireo config is yours to write.
 
 The bridge reuses it and leaves it alone on exit. `dev.sh` does the same — it only
 starts a gateway it does not find.
+
+---
+
+## Docker
+
+**Yes, and in the same image as the daemon.** The image contains every binary in
+the repository, so the bridge is already there — only the entrypoint differs:
+
+```bash
+docker build -t vireo .
+
+docker run --rm --network host \
+  -e OPENCLAW_GATEWAY_TOKEN \
+  -v "$PWD/openclaw-bridge.yaml:/app/openclaw-bridge.yaml:ro" \
+  --entrypoint /app/openclaw-bridge \
+  vireo -config /app/openclaw-bridge.yaml
+```
+
+**`--network host` is not optional.** The OpenClaw gateway binds `127.0.0.1:18789`
+by default. A container on the default bridge network cannot reach the host's
+loopback, and `host.docker.internal` does **not** help — it resolves to the host's
+bridge address (`172.17.0.1`), which the gateway is not listening on:
+
+```
+openclaw: gateway unreachable at http://host.docker.internal:18789:
+  dial tcp 172.17.0.1:18789: connect: connection refused
+```
+
+Options, in order of preference:
+
+1. **`--network host`** — the container shares the host's loopback, so
+   `base_url: http://127.0.0.1:18789` just works. What the command above uses.
+2. **`--add-host=host.docker.internal:host-gateway`** plus moving the gateway off
+   loopback (`gateway.bind = "lan"`). Works, but exposes the gateway on the
+   network — and a valid token is full operator access, so only do it deliberately.
+3. **The gateway in a container too**, on a shared user-defined network, with
+   `base_url: http://<gateway-container>:18789`. The usual production shape.
+
+Same for vireo: if `vireo` runs in a container and the bridge on the host, the
+daemon's `transport` must name an address reachable from inside the container —
+`127.0.0.1` there is the container itself, not the host.
+
+### One image, or three?
+
+One image is enough and is what this repository builds. Three containers from it,
+each with its own `--entrypoint`:
+
+```bash
+docker run --entrypoint /app/openclaw-bridge vireo ...   # the bridge
+docker run --entrypoint /app/vireo           vireo ...   # the daemon
+docker run --entrypoint /app/fakeagent       vireo ...   # the stub, if wanted
+```
+
+They communicate by container name on a user-defined network. Building a separate
+small image per binary is possible — each is a static Go binary — but you then
+maintain a build per backend, which is what `scripts/build.sh` exists to avoid.
 
 ---
 
@@ -178,8 +234,10 @@ agents:
 
 ### Why the port is 18090
 
-`:8088` is `fakeagent`, `:8089` the ZIWA bridge, `:8090-8094` VS Code's own server
-on a developer machine. `:18090` is clear of all of them.
+A high port, chosen so a local run does not collide with the other processes a
+development machine tends to have — 8088 is `fakeagent`, and VS Code's own server
+takes 8090-8094. Any free port works: set `listen` and point vireo's `transport`
+at it.
 
 ### Why the token is not in the file
 

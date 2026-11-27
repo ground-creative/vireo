@@ -19,7 +19,7 @@
 // One bridge serves many vireo agents: each webhook agent name maps to its own
 // OpenClaw agent, so "concierge" and "researcher" can be different agents
 // without a second process.
-package openclaw
+package main
 
 import (
 	"bytes"

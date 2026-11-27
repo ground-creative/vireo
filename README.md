@@ -221,19 +221,20 @@ A **backend** is whatever answers the messages the daemon forwards. vireo does n
 know what is behind a `transport` URL. [`docs/BACKENDS.md`](docs/BACKENDS.md)
 explains the webhook contract and how to write one.
 
-Bridges live in `cmd/<name>/`, each with its own README — they are documented next
-to the code, not here, because they need different things installed and this page
-would have to grow a section per backend.
+Bridges live in `bridges/<name>/`, each with its own README — documented next to
+the code, not here, because each needs different things installed and this page
+would grow a section per backend.
 
 | Backend | What it is | Docs |
 | --- | --- | --- |
 | `fakeagent` | canned replies, no model, no key — for testing the daemon | [`cmd/fakeagent`](cmd/fakeagent) |
-| `openclaw-bridge` | a real agent through an [OpenClaw](https://openclaw.ai) gateway | [`cmd/openclaw-bridge`](cmd/openclaw-bridge) |
+| `openclaw-bridge` | a real agent through an [OpenClaw](https://openclaw.ai) gateway | [`bridges/openclaw-bridge`](bridges/openclaw-bridge) |
 
-Backends we intend to add live in the same shape: an HTTP server speaking the
-webhook contract, under `cmd/`, with a README covering install, run and configure.
-Nothing in this repository needs to change to add one —
-[`scripts/build.sh`](scripts/build.sh) discovers it.
+New backends go in `bridges/<name>/` the same way: an HTTP server speaking the
+webhook contract, with a README covering install, run and configure. Nothing else
+in this repository changes to add one — [`scripts/build.sh`](scripts/build.sh)
+discovers it. What separates `bridges/` from `cmd/` is in
+[`docs/BUILDING.md`](docs/BUILDING.md#cmd-versus-bridges).
 
 What follows from the split between daemon, client and backend:
 
@@ -703,7 +704,7 @@ are in [`docs/PROTOCOL.md`](docs/PROTOCOL.md#cancelling-a-turn).
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — build, Docker, certificates,
   install, firewall, DNS, systemd, operations
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — how this daemon speaks `portico/1`
-- [`cmd/openclaw-bridge`](cmd/openclaw-bridge) — a real backend, with its config
+- [`bridges/openclaw-bridge`](bridges/openclaw-bridge) — a real backend, with its config
   reference; [`docs/OPENCLAW-GATEWAY.md`](docs/OPENCLAW-GATEWAY.md) — the gateway
   side, including the settings a multi-user deployment needs- [`vireo-mcp`](https://github.com/ground-creative/vireo-mcp) — the MCP bridge,
   its host setup, transports, identity and tokens

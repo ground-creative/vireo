@@ -123,7 +123,7 @@ export OPENCLAW_GATEWAY_TOKEN="$(jq -r '.gateway.auth.token' ~/.openclaw/opencla
 ./scripts/dev.sh --backend openclaw                  # or let the script do all of it
 ```
 
-See [`cmd/openclaw-bridge/README.md`](../cmd/openclaw-bridge/README.md) for the
+See [`bridges/openclaw-bridge/README.md`](../bridges/openclaw-bridge/README.md) for the
 bridge — install, run, every config key — and
 [`OPENCLAW-GATEWAY.md`](OPENCLAW-GATEWAY.md) for the gateway side and the
 isolation settings a multi-user deployment needs.

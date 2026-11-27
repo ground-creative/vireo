@@ -44,7 +44,7 @@ By hand:
 ## When to use something else
 
 It proves the pipe, not the product. For a real answer, use a backend that
-actually thinks — [`openclaw-bridge`](../openclaw-bridge) is one, and
+actually thinks — [`openclaw-bridge`](../../bridges/openclaw-bridge) is one, and
 [`../../docs/BACKENDS.md`](../../docs/BACKENDS.md) describes how to write your own.
 
 Note that this backend is **stateless and ignores `session_id`**: it never

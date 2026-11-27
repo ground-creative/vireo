@@ -6,9 +6,9 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-# Discovered, not listed: every cmd/<name> with a main package, plus the root
-# package as `vireo`. Adding a backend does not change this file.
-RUN for d in cmd/*/; do \
+# Discovered, not listed: every cmd/<name> and bridges/<name> with a main package,
+# plus the root package as `vireo`. Adding a backend does not change this file.
+RUN for d in cmd/*/ bridges/*/; do \
       [ -d "$d" ] || continue; \
       name="$(basename "$d")"; \
       if go list -f '{{.Name}}' "./$d" 2>/dev/null | grep -qx main; then \

@@ -23,8 +23,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-
-	"vireo/internal/openclaw"
 )
 
 func main() {
@@ -32,7 +30,7 @@ func main() {
 	addr := flag.String("addr", "", "listen address, overrides the config file (default :18090)")
 	flag.Parse()
 
-	cfg, listen, err := openclaw.LoadConfig(*configPath)
+	cfg, listen, err := LoadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -40,7 +38,7 @@ func main() {
 		listen = strings.TrimSpace(*addr)
 	}
 
-	bridge, err := openclaw.New(cfg)
+	bridge, err := New(cfg)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -57,8 +55,8 @@ func main() {
 // tokenSource says where the token came from without printing it, so a
 // misconfigured bridge is diagnosable without leaking the secret.
 func tokenSource(path string) string {
-	if v := strings.TrimSpace(os.Getenv(openclaw.TokenEnvVar)); v != "" {
-		return openclaw.TokenEnvVar + " (environment)"
+	if v := strings.TrimSpace(os.Getenv(TokenEnvVar)); v != "" {
+		return TokenEnvVar + " (environment)"
 	}
 	return "config file " + path
 }

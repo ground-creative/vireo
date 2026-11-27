@@ -216,7 +216,7 @@ case "${backend:-}" in
     # so a first run needs no copy step.
     bridge_cfg=openclaw-bridge.yaml
     if [ ! -f "$bridge_cfg" ]; then
-      bridge_cfg=cmd/openclaw-bridge/openclaw-bridge.example.yaml
+      bridge_cfg=bridges/openclaw-bridge/openclaw-bridge.example.yaml
       [ -n "$quiet" ] || log "no openclaw-bridge.yaml — using the shipped example"
     fi
     start_child bridge "$BIN/openclaw-bridge" -config "$bridge_cfg"

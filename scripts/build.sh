@@ -11,7 +11,7 @@
 #
 #   cmd/vireo-chat        → bin/vireo-chat
 #   cmd/fakeagent         → bin/fakeagent
-#   cmd/openclaw-bridge   → bin/openclaw-bridge
+#   bridges/openclaw-bridge   → bin/openclaw-bridge
 #   . (package main)      → bin/vireo
 set -euo pipefail
 
@@ -37,9 +37,9 @@ build() {
   fi
 }
 
-# cmd/<name> — discovered. A directory without a main package is skipped
-# silently: it is not a binary, and saying so on every run would be noise.
-for dir in cmd/*/; do
+# cmd/<name> and bridges/<name> — discovered. A directory without a main package
+# is skipped silently: it is not a binary, and saying so on every run is noise.
+for dir in cmd/*/ bridges/*/; do
   [ -d "$dir" ] || continue
   name="$(basename "$dir")"
   if go list -f '{{.Name}}' "./$dir" 2>/dev/null | grep -qx main; then

@@ -18,8 +18,8 @@
 #
 # That change applies without a restart.
 
-# 18090: clear of fakeagent (:8088), the ZIWA bridge (:8089), and VS Code's own
-# server, which binds 8090-8094 on a developer machine.
+# 18090: a high port unlikely to collide with whatever else is running locally
+# (8088 is fakeagent; VS Code's own server takes 8090-8094).
 listen: ":18090"
 
 openclaw:
